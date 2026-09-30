@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import 'adhkar_data.dart';
+import 'adhkar_more.dart';
 import 'adhkar_detail.dart';
 import 'nawawi_screen.dart';
 
@@ -9,6 +10,7 @@ class AdhkarScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final all = [...adhkarCategories, ...adhkarMore];
     return ListView(
       padding: const EdgeInsets.all(kPaddingMedium),
       children: [
@@ -18,7 +20,7 @@ class AdhkarScreen extends StatelessWidget {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: kPaddingMedium),
-        for (final c in adhkarCategories)
+        for (final c in all)
           Card(
             color: kCardBackground,
             margin: const EdgeInsets.only(bottom: kPaddingMedium),
