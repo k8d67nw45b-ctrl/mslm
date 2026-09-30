@@ -23,6 +23,12 @@ jobs:
       - name: Generate android folder
         run: flutter create --platforms=android --project-name muslm --org com.muslm .
 
+      - name: Configure Android manifest
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/><uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/><application|' $M
+          sed -i 's|android:label="muslm"|android:label="مسلم"|' $M
+
       - run: flutter pub get
 
       - name: Build APK
