@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
+import '../core/theme_controller.dart';
 import 'home_tab.dart';
 import 'quran_screen.dart';
 import 'adhkar_screen.dart';
@@ -26,9 +27,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = ThemeController.mode.value == ThemeMode.dark;
     return Scaffold(
       appBar: AppBar(
         title: const Text(appName),
+        actions: [
+          IconButton(
+            icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
+            onPressed: ThemeController.toggle,
+          ),
+        ],
       ),
       body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
@@ -36,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         backgroundColor: kCardBackground,
         selectedItemColor: kGreen,
-        unselectedItemColor: Colors.white54,
+        unselectedItemColor: Colors.grey,
         onTap: (i) => setState(() => _selectedIndex = i),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
