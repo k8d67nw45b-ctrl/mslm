@@ -5,7 +5,12 @@ const String appName = 'مسلم';
 // الألوان
 const Color kGreen = Color(0xFF10B981);
 const Color kDarkBackground = Color(0xFF0F1419);
-const Color kCardBackground = Color(0xFF1A2325);
+const Color kLightBackground = Color(0xFFF3F4F6);
+const Color kCardDark = Color(0xFF1A2325);
+const Color kCardLight = Color(0xFFFFFFFF);
+
+// لون البطاقات يتغير حسب الوضع
+Color kCardBackground = kCardDark;
 
 // المسافات
 const double kPaddingSmall = 8.0;
