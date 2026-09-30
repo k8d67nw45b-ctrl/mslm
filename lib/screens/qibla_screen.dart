@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 import '../core/constants.dart';
+import 'compass_painter.dart';
 
 class QiblaScreen extends StatefulWidget {
   const QiblaScreen({Key? key}) : super(key: key);
@@ -12,7 +13,7 @@ class QiblaScreen extends StatefulWidget {
 }
 
 class _QiblaScreenState extends State<QiblaScreen> {
-  double? qiblaBearing; // زاوية القبلة من الشمال الحقيقي
+  double? qiblaBearing;
   String? error;
 
   @override
@@ -38,15 +39,17 @@ class _QiblaScreenState extends State<QiblaScreen> {
         return;
       }
       final pos = await Geolocator.getCurrentPosition();
-      setState(() =>
-          qiblaBearing = _bearingToKaaba(pos.latitude, pos.longitude));
+      setState(() {
+        qiblaBearing = _bearingToKaaba(pos.latitude, pos.longitude);
+      });
     } catch (e) {
       setState(() => error = 'تعذّر تحديد الموقع');
     }
   }
 
   double _bearingToKaaba(double lat, double lon) {
-    const kaabaLat = 21.4225, kaabaLon = 39.8262;
+    const kaabaLat = 21.4225;
+    const kaabaLon = 39.8262;
     double rad(double d) => d * math.pi / 180;
     final dLon = rad(kaabaLon - lon);
     final y = math.sin(dLon) * math.cos(rad(kaabaLat));
@@ -81,7 +84,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
     if (qiblaBearing == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    return _buildCompass();
+  }
 
+  Widget _buildCompass() {
     return StreamBuilder<CompassEvent>(
       stream: FlutterCompass.events,
       builder: (context, snap) {
@@ -98,8 +104,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('اتجاه القبلة',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'اتجاه القبلة',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: kPaddingLarge),
               Container(
                 width: 260,
@@ -112,4 +120,39 @@ class _QiblaScreenState extends State<QiblaScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    Transform.rot
+                    Transform.rotate(
+                      angle: dialAngle,
+                      child: CustomPaint(
+                        size: const Size(260, 260),
+                        painter: CompassPainter(),
+                      ),
+                    ),
+                    Transform.rotate(
+                      angle: arrowAngle,
+                      child: const Icon(
+                        Icons.navigation,
+                        color: kGreen,
+                        size: 90,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: kPaddingLarge),
+              Text(
+                '${qiblaBearing!.toStringAsFixed(1)}°',
+                style: const TextStyle(
+                  color: kGreen,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: kPaddingSmall),
+              const Text('السهم الأخضر يشير إلى القبلة'),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
