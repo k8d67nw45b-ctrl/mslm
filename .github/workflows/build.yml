@@ -26,13 +26,31 @@ jobs:
       - name: Configure Android manifest
         run: |
           M=android/app/src/main/AndroidManifest.xml
-          sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/><uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/><application|' $M
-          sed -i 's|android:label="muslm"|android:label="مسلم"|' $M
+          python3 - "$M" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p, encoding='utf-8').read()
+          perms = ('<uses-permission android:name="android.permission.INTERNET"/>'
+                   '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>'
+                   '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>')
+          if 'permission.INTERNET' not in s:
+              s = s.replace('<application', perms + '<application', 1)
+          s = s.replace('android:label="muslm"', 'android:label="مسلم"')
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+          cat $M
+          grep -q "permission.INTERNET" $M
 
       - run: flutter pub get
 
       - name: Build APK
         run: flutter build apk --release
+
+      - name: Check APK permissions
+        run: |
+          AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt | tail -1)
+          $AAPT dump permissions build/app/outputs/flutter-apk/app-release.apk | tee perms.txt
+          grep -q "android.permission.INTERNET" perms.txt
 
       - uses: actions/upload-artifact@v4
         with:
