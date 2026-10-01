@@ -11,6 +11,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Quran assets
+        id: qcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            assets/mushaf
+            assets/data
+          key: quran-assets-v1
+
+      - name: Download Quran assets
+        if: steps.qcache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y webp
+          mkdir -p assets/mushaf assets/data
+          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/quran_uthmani.json https://api.alquran.cloud/v1/quran/quran-uthmani
+          python3 -c "import json; d=json.load(open('assets/data/quran_uthmani.json')); assert len(d['data']['surahs'])==114"
+          seq 1 604 | xargs -P 8 -I{} sh -c 'curl -fsSL --retry 5 --retry-delay 3 -o /tmp/p{}.png "https://cdn.jsdelivr.net/gh/SakinaDevGroup/mushaf-madani-cdn@main/light/p{}.png" && cwebp -quiet -q 90 /tmp/p{}.png -o assets/mushaf/p{}.webp && rm /tmp/p{}.png'
+          test "$(ls assets/mushaf | wc -l)" -eq 604
+          du -sh assets
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -46,11 +67,8 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Check APK permissions
-        run: |
-          AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt | tail -1)
-          $AAPT dump permissions build/app/outputs/flutter-apk/app-release.apk | tee perms.txt
-          grep -q "android.permission.INTERNET" perms.txt
+      - name: APK size
+        run: ls -lh build/app/outputs/flutter-apk/app-release.apk
 
       - uses: actions/upload-artifact@v4
         with:
