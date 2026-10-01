@@ -7,6 +7,8 @@ import 'adhkar_screen.dart';
 import 'prayer_screen.dart';
 import 'qibla_screen.dart';
 
+const _titles = ['الرئيسية', 'القرآن', 'الأذكار', 'الصلاة', 'القبلة'];
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
@@ -29,15 +31,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final dark = ThemeController.mode.value == ThemeMode.dark;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(appName),
-        actions: [
-          IconButton(
-            icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
-            onPressed: ThemeController.toggle,
-          ),
-        ],
-      ),
+      appBar: _selectedIndex == 0
+          ? null
+          : AppBar(
+              title: Text(_titles[_selectedIndex]),
+              actions: [
+                IconButton(
+                  icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
+                  onPressed: ThemeController.toggle,
+                ),
+              ],
+            ),
       body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
