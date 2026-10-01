@@ -1,31 +1,20 @@
 import 'package:adhan/adhan.dart';
-import 'package:geolocator/geolocator.dart';
+import 'location_service.dart';
 
 class PrayerData {
   final PrayerTimes times;
   final String next;
-  PrayerData(this.times, this.next);
+  final String place;
+  PrayerData(this.times, this.next, this.place);
 }
 
 Future<PrayerData> loadPrayerData() async {
-  final enabled = await Geolocator.isLocationServiceEnabled();
-  if (!enabled) {
-    throw 'فعّل خدمة الموقع (GPS) بالجوال';
-  }
-  var perm = await Geolocator.checkPermission();
-  if (perm == LocationPermission.denied) {
-    perm = await Geolocator.requestPermission();
-  }
-  if (perm == LocationPermission.denied ||
-      perm == LocationPermission.deniedForever) {
-    throw 'يلزم السماح بالوصول إلى الموقع';
-  }
-  final pos = await Geolocator.getCurrentPosition();
-  final coords = Coordinates(pos.latitude, pos.longitude);
+  final loc = await getLocation();
+  final coords = Coordinates(loc.lat, loc.lon);
   final params = CalculationMethod.umm_al_qura.getParameters();
   params.madhab = Madhab.shafi;
   final times = PrayerTimes.today(coords, params);
-  return PrayerData(times, _nextName(times));
+  return PrayerData(times, _nextName(times), loc.name);
 }
 
 String _nextName(PrayerTimes t) {
