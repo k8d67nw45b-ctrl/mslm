@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
+import 'bookmarks.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
-import 'quran_service.dart';
+import 'quran_text.dart';
 
 class QuranScreen extends StatefulWidget {
   const QuranScreen({Key? key}) : super(key: key);
@@ -12,8 +13,7 @@ class QuranScreen extends StatefulWidget {
 }
 
 class _QuranScreenState extends State<QuranScreen> {
-  List<SurahInfo>? surahs;
-  Map<int, int>? pages;
+  List<SurahItem>? surahs;
   String? error;
   int? last;
 
@@ -26,12 +26,10 @@ class _QuranScreenState extends State<QuranScreen> {
   Future<void> _load() async {
     setState(() => error = null);
     try {
-      final s = await loadSurahList();
-      final p = await loadSurahPages();
+      final s = await loadSurahItems();
       final l = await getLastPage();
       setState(() {
         surahs = s;
-        pages = p;
         last = l;
       });
     } catch (e) {
@@ -67,12 +65,25 @@ class _QuranScreenState extends State<QuranScreen> {
         ),
       );
     }
-    if (surahs == null || pages == null) {
+    if (surahs == null) {
       return const Center(child: CircularProgressIndicator());
     }
     return ListView(
       padding: const EdgeInsets.all(kPaddingMedium),
       children: [
+        Card(
+          color: kCardBackground,
+          margin: const EdgeInsets.only(bottom: kPaddingMedium),
+          child: ListTile(
+            leading: const Icon(Icons.bookmarks, color: kGreen),
+            title: const Text('نقاط الحفظ'),
+            trailing: const Icon(Icons.chevron_left, color: kGreen),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BookmarksScreen()),
+            ),
+          ),
+        ),
         if (last != null)
           Card(
             color: kGreen,
@@ -93,8 +104,8 @@ class _QuranScreenState extends State<QuranScreen> {
                 style: const TextStyle(color: kGreen, fontSize: 18),
               ),
               title: Text(s.name, style: const TextStyle(fontSize: 20)),
-              subtitle: Text('صفحة ${pages![s.number]}'),
-              onTap: () => _open(pages![s.number]!),
+              subtitle: Text('${s.ayahs} آية، صفحة ${s.page}'),
+              onTap: () => _open(s.page),
             ),
           ),
       ],
