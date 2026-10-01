@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
 import 'nawawi_data.dart';
+import 'nawawi_service.dart';
 
 class NawawiScreen extends StatefulWidget {
   const NawawiScreen({Key? key}) : super(key: key);
@@ -15,16 +16,31 @@ class _NawawiScreenState extends State<NawawiScreen> {
   String query = '';
   bool onlyFav = false;
   Set<String> favs = {};
+  List<Hadith> all = nawawiList;
+  String? note;
 
   @override
   void initState() {
     super.initState();
     _loadFavs();
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
+    try {
+      final d = await loadNawawi();
+      setState(() {
+        all = d;
+        note = null;
+      });
+    } catch (e) {
+      setState(() => note = 'تعذّر جلب الأحاديث كاملة، تأكد من الإنترنت');
+    }
   }
 
   Future<void> _loadFavs() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => favs = (prefs.getStringList('nawawi_favs') ?? []).toSet());
+    final p = await SharedPreferences.getInstance();
+    setState(() => favs = (p.getStringList('nawawi_favs') ?? []).toSet());
   }
 
   Future<void> _toggle(int n) async {
@@ -36,17 +52,15 @@ class _NawawiScreenState extends State<NawawiScreen> {
         favs.add(k);
       }
     });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('nawawi_favs', favs.toList());
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList('nawawi_favs', favs.toList());
   }
 
   List<Hadith> get _filtered {
-    return nawawiList.where((h) {
+    return all.where((h) {
       if (onlyFav && !favs.contains(h.number.toString())) return false;
       if (query.isEmpty) return true;
-      return h.text.contains(query) ||
-          h.narrator.contains(query) ||
-          h.benefit.contains(query);
+      return h.text.contains(query);
     }).toList();
   }
 
@@ -76,9 +90,16 @@ class _NawawiScreenState extends State<NawawiScreen> {
               ),
             ),
           ),
+          if (note != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: kPaddingSmall),
+              child: Text(note!),
+            ),
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: kPaddingMedium),
+              padding: const EdgeInsets.symmetric(
+                horizontal: kPaddingMedium,
+              ),
               itemCount: items.length,
               itemBuilder: (context, i) => _card(items[i]),
             ),
@@ -108,10 +129,14 @@ class _NawawiScreenState extends State<NawawiScreen> {
             ),
             const SizedBox(height: kPaddingSmall),
             Text(h.text, style: const TextStyle(fontSize: 19, height: 1.8)),
-            const SizedBox(height: kPaddingSmall),
-            Text('الراوي: ${h.narrator}'),
-            const SizedBox(height: kPaddingSmall),
-            Text('الفائدة: ${h.benefit}'),
+            if (h.narrator.isNotEmpty) ...[
+              const SizedBox(height: kPaddingSmall),
+              Text('الراوي: ${h.narrator}'),
+            ],
+            if (h.benefit.isNotEmpty) ...[
+              const SizedBox(height: kPaddingSmall),
+              Text('الفائدة: ${h.benefit}'),
+            ],
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -125,9 +150,7 @@ class _NawawiScreenState extends State<NawawiScreen> {
                 IconButton(
                   icon: const Icon(Icons.copy),
                   onPressed: () {
-                    Clipboard.setData(
-                      ClipboardData(text: '${h.text}\n(${h.narrator})'),
-                    );
+                    Clipboard.setData(ClipboardData(text: h.text));
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('تم النسخ')),
                     );
