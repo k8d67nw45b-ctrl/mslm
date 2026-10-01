@@ -1,15 +1,23 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+const _invert = ColorFilter.matrix(<double>[
+  -1, 0, 0, 0, 255,
+  0, -1, 0, 0, 255,
+  0, 0, -1, 0, 255,
+  0, 0, 0, 1, 0,
+]);
 
 class MushafPage extends StatefulWidget {
   final int page;
   final bool dark;
   final ValueChanged<bool> onZoom;
+  final VoidCallback onTap;
   const MushafPage({
     Key? key,
     required this.page,
     required this.dark,
     required this.onZoom,
+    required this.onTap,
   }) : super(key: key);
 
   @override
@@ -25,14 +33,19 @@ class _MushafPageState extends State<MushafPage> {
     super.dispose();
   }
 
-  String get _url {
-    final theme = widget.dark ? 'dark' : 'light';
-    return 'https://cdn.jsdelivr.net/gh/SakinaDevGroup/'
-        'mushaf-madani-cdn@main/$theme/p${widget.page}.png';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final img = Image.asset(
+      'assets/mushaf/p${widget.page}.webp',
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (c, e, s) => const Center(
+        child: Text('الصفحة غير موجودة داخل التطبيق'),
+      ),
+    );
+    final shown = widget.dark
+        ? ColorFiltered(colorFilter: _invert, child: img)
+        : img;
     return InteractiveViewer(
       transformationController: _c,
       minScale: 1,
@@ -40,18 +53,13 @@ class _MushafPageState extends State<MushafPage> {
       onInteractionEnd: (_) {
         widget.onZoom(_c.value.getMaxScaleOnAxis() > 1.05);
       },
-      child: SizedBox(
-        width: double.infinity,
-        height: double.infinity,
-        child: CachedNetworkImage(
-          imageUrl: _url,
-          fit: BoxFit.contain,
-          placeholder: (c, u) => const Center(
-            child: CircularProgressIndicator(),
-          ),
-          errorWidget: (c, u, e) => const Center(
-            child: Text('تعذّر تحميل الصفحة، تأكد من الإنترنت'),
-          ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: SizedBox(
+          width: double.infinity,
+          height: double.infinity,
+          child: shown,
         ),
       ),
     );
