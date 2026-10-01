@@ -1,27 +1,42 @@
-name: muslm
-description: Muslim companion app
-publish_to: 'none'
-version: 1.0.0+1
+name: Build Android APK
 
-environment:
-  sdk: '>=3.3.0 <4.0.0'
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
-dependencies:
-  flutter:
-    sdk: flutter
-  flutter_localizations:
-    sdk: flutter
-  intl: any
-  shared_preferences: ^2.3.2
-  adhan: ^2.0.0+1
-  geolocator: ^13.0.1
-  flutter_compass: ^0.8.1
-  http: ^1.2.2
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^5.0.0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-flutter:
-  uses-material-design: true
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Generate android folder
+        run: flutter create --platforms=android --project-name muslm --org com.muslm .
+
+      - name: Configure Android manifest
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/><uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/><application|' $M
+          sed -i 's|android:label="muslm"|android:label="مسلم"|' $M
+          cat $M
+          grep -q "android.permission.INTERNET" $M
+
+      - run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: muslm-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
