@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/constants.dart';
+import 'location_service.dart';
 import 'prayer_logic.dart';
 
 class PrayerScreen extends StatefulWidget {
@@ -33,6 +34,11 @@ class _PrayerScreenState extends State<PrayerScreen> {
     }
   }
 
+  Future<void> _pick() async {
+    final ok = await showCityPicker(context);
+    if (ok) _load();
+  }
+
   String _fmt(DateTime t) => DateFormat('hh:mm a').format(t.toLocal());
 
   @override
@@ -47,6 +53,10 @@ class _PrayerScreenState extends State<PrayerScreen> {
               Text(error!, textAlign: TextAlign.center),
               const SizedBox(height: kPaddingMedium),
               ElevatedButton(
+                onPressed: _pick,
+                child: const Text('اختيار المدينة'),
+              ),
+              TextButton(
                 onPressed: _load,
                 child: const Text('إعادة المحاولة'),
               ),
@@ -79,7 +89,12 @@ class _PrayerScreenState extends State<PrayerScreen> {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: kPaddingMedium),
+        TextButton.icon(
+          onPressed: _pick,
+          icon: const Icon(Icons.location_on, color: kGreen),
+          label: Text('الموقع: ${d.place} (تغيير)'),
+        ),
+        const SizedBox(height: kPaddingSmall),
         for (final r in rows) _row(r, r.key == d.next),
       ],
     );
