@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
-import 'package:geolocator/geolocator.dart';
 import '../core/constants.dart';
 import 'compass_painter.dart';
+import 'location_service.dart';
 
 class QiblaScreen extends StatefulWidget {
   const QiblaScreen({Key? key}) : super(key: key);
@@ -15,6 +15,7 @@ class QiblaScreen extends StatefulWidget {
 class _QiblaScreenState extends State<QiblaScreen> {
   double? qiblaBearing;
   String? error;
+  String place = '';
 
   @override
   void initState() {
@@ -23,28 +24,24 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   Future<void> _loadQibla() async {
+    setState(() {
+      error = null;
+      qiblaBearing = null;
+    });
     try {
-      final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) {
-        setState(() => error = 'فعّل خدمة الموقع (GPS) بالجوال');
-        return;
-      }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        setState(() => error = 'يلزم السماح بالوصول إلى الموقع');
-        return;
-      }
-      final pos = await Geolocator.getCurrentPosition();
+      final loc = await getLocation();
       setState(() {
-        qiblaBearing = _bearingToKaaba(pos.latitude, pos.longitude);
+        place = loc.name;
+        qiblaBearing = _bearingToKaaba(loc.lat, loc.lon);
       });
     } catch (e) {
-      setState(() => error = 'تعذّر تحديد الموقع');
+      setState(() => error = e.toString());
     }
+  }
+
+  Future<void> _pick() async {
+    final ok = await showCityPicker(context);
+    if (ok) _loadQibla();
   }
 
   double _bearingToKaaba(double lat, double lon) {
@@ -70,10 +67,11 @@ class _QiblaScreenState extends State<QiblaScreen> {
               Text(error!, textAlign: TextAlign.center),
               const SizedBox(height: kPaddingMedium),
               ElevatedButton(
-                onPressed: () {
-                  setState(() => error = null);
-                  _loadQibla();
-                },
+                onPressed: _pick,
+                child: const Text('اختيار المدينة'),
+              ),
+              TextButton(
+                onPressed: _loadQibla,
                 child: const Text('إعادة المحاولة'),
               ),
             ],
@@ -108,7 +106,12 @@ class _QiblaScreenState extends State<QiblaScreen> {
                 'اتجاه القبلة',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: kPaddingLarge),
+              TextButton.icon(
+                onPressed: _pick,
+                icon: const Icon(Icons.location_on, color: kGreen),
+                label: Text('الموقع: $place (تغيير)'),
+              ),
+              const SizedBox(height: kPaddingMedium),
               Container(
                 width: 260,
                 height: 260,
