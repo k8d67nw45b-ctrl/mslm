@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'hisn_service.dart';
 import 'nawawi_data.dart';
 import 'nawawi_service.dart';
+import 'quran_text.dart';
 
 class DailyItem {
   final String text;
@@ -21,28 +21,15 @@ String _plain(String s) {
 }
 
 Future<DailyItem?> verseOfDay() async {
-  final n = DateTime.now();
-  final key = 'votd_${n.year}-${n.month}-${n.day}';
-  final p = await SharedPreferences.getInstance();
-  final saved = p.getString(key);
-  if (saved != null) {
-    final m = jsonDecode(saved);
-    return DailyItem(m['t'] as String, m['s'] as String);
-  }
   try {
-    var num = (_dayIndex() * 37) % 6236 + 1;
-    for (var i = 0; i < 6; i++) {
-      final r = await http.get(Uri.parse(
-          'https://api.alquran.cloud/v1/ayah/$num/quran-uthmani'));
-      if (r.statusCode != 200) return null;
-      final d = jsonDecode(utf8.decode(r.bodyBytes))['data'];
-      final text = d['text'] as String;
-      if (text.length >= 25) {
-        final s = '${d['surah']['name']}: ${d['numberInSurah']}';
-        await p.setString(key, jsonEncode({'t': text, 's': s}));
-        return DailyItem(text, s);
+    final all = await loadAllAyahs();
+    if (all.isEmpty) return null;
+    final start = (_dayIndex() * 37) % all.length;
+    for (var k = 0; k < 30; k++) {
+      final a = all[(start + k) % all.length];
+      if (a.text.length >= 25 && a.text.length <= 220) {
+        return DailyItem(a.text, '${a.surahName}: ${a.ayah}');
       }
-      num = num % 6236 + 1;
     }
   } catch (_) {}
   return null;
@@ -61,6 +48,16 @@ Future<DailyItem?> hadithOfDay() async {
 }
 
 Future<DailyItem?> duaOfDay() async {
+  final n = DateTime.now();
+  final key = 'dod_${n.year}-${n.month}-${n.day}';
+  final p = await SharedPreferences.getInstance();
+  final saved = p.getString(key);
+  if (saved != null) {
+    try {
+      final m = jsonDecode(saved);
+      return DailyItem(m['t'] as String, m['s'] as String);
+    } catch (_) {}
+  }
   try {
     final all = await loadHisn();
     final c = <DailyItem>[];
@@ -76,28 +73,9 @@ Future<DailyItem?> duaOfDay() async {
       }
     }
     if (c.isEmpty) return null;
-    return c[_dayIndex() % c.length];
-  } catch (_) {
-    return null;
-  }
-}
-
-Future<double?> morningProgress() async {
-  try {
-    final all = await loadHisn();
-    final s = all.firstWhere((e) => e.title.contains('الصباح والمساء'));
-    final p = await SharedPreferences.getInstance();
-    final n = DateTime.now();
-    var total = 0;
-    var done = 0;
-    for (var i = 0; i < s.texts.length; i++) {
-      final max = countOf(s.texts[i]);
-      final c =
-          p.getInt('hisn_${n.year}-${n.month}-${n.day}_${s.title}_$i') ?? 0;
-      total += max;
-      done += c > max ? max : c;
-    }
-    return total == 0 ? 0 : done / total;
+    final pick = c[_dayIndex() % c.length];
+    await p.setString(key, jsonEncode({'t': pick.text, 's': pick.source}));
+    return pick;
   } catch (_) {
     return null;
   }
