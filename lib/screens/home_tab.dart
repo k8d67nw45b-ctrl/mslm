@@ -16,6 +16,8 @@ import 'home_sections.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
 import 'nawawi_screen.dart';
+import 'notification_service.dart';
+import 'notifications_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
 import 'qibla_screen.dart';
@@ -50,6 +52,7 @@ class _HomeTabState extends State<HomeTab> {
     _loadPrayer();
     _loadDaily();
     _loadMisc();
+    _scheduleNotifs();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
@@ -59,6 +62,7 @@ class _HomeTabState extends State<HomeTab> {
     if (widget.active && !old.active) {
       _tick();
       _loadMisc();
+      _scheduleNotifs();
     }
   }
 
@@ -67,6 +71,12 @@ class _HomeTabState extends State<HomeTab> {
     _timer?.cancel();
     leftN.dispose();
     super.dispose();
+  }
+
+  Future<void> _scheduleNotifs() async {
+    try {
+      await rescheduleAll();
+    } catch (_) {}
   }
 
   Future<void> _loadPrayer() async {
@@ -136,9 +146,7 @@ class _HomeTabState extends State<HomeTab> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يلزم الإنترنت أول مرة لتحميل أذكار النوم'),
-        ),
+        const SnackBar(content: Text('تعذّر فتح أذكار النوم')),
       );
     }
   }
@@ -232,9 +240,7 @@ class _HomeTabState extends State<HomeTab> {
             next: next,
             left: left,
             onSearch: () => _go(const HisnScreen()),
-            onBell: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('الإشعارات قيد الإضافة')),
-            ),
+            onBell: () => _go(const NotificationsScreen()),
             onTheme: ThemeController.toggle,
             onAdhkar: _openNow,
           ),
