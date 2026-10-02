@@ -1,45 +1,50 @@
 import 'package:flutter/material.dart';
-import '../core/constants.dart';
-import 'daily_adhkar_screen.dart';
-import 'hisn_screen.dart';
-import 'nawawi_screen.dart';
-import 'hajj_screen.dart';
+import 'cards_viewer.dart';
+import 'daily_adhkar.dart';
 
-class AdhkarScreen extends StatelessWidget {
-  const AdhkarScreen({Key? key}) : super(key: key);
+class DailyAdhkarScreen extends StatefulWidget {
+  final bool morning;
+  const DailyAdhkarScreen({Key? key, required this.morning})
+      : super(key: key);
 
-  Widget _tile(BuildContext c, String t, IconData i, Widget page) {
-    return Card(
-      color: kCardBackground,
-      margin: const EdgeInsets.only(bottom: kPaddingMedium),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(kPaddingMedium),
-        leading: Icon(i, color: kGreen, size: 34),
-        title: Text(t, style: const TextStyle(fontSize: 18)),
-        trailing: const Icon(Icons.chevron_left, color: kGreen),
-        onTap: () => Navigator.push(
-          c,
-          MaterialPageRoute(builder: (_) => page),
-        ),
-      ),
-    );
+  @override
+  State<DailyAdhkarScreen> createState() => _DailyAdhkarScreenState();
+}
+
+class _DailyAdhkarScreenState extends State<DailyAdhkarScreen> {
+  late final Future<List<AdhkarItem>> f = loadAdhkar(widget.morning);
+
+  String _src(AdhkarItem a) {
+    final parts = <String>[];
+    if (a.source.isNotEmpty) parts.add(a.source);
+    if (a.fadl.isNotEmpty) parts.add('الفضل: ${a.fadl}');
+    return parts.join('\n\n');
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(kPaddingMedium),
-      children: [
-        _tile(context, 'أذكار الصباح', Icons.wb_sunny,
-            const DailyAdhkarScreen(morning: true)),
-        _tile(context, 'أذكار المساء', Icons.nights_stay,
-            const DailyAdhkarScreen(morning: false)),
-        _tile(context, 'حصن المسلم', Icons.favorite, const HisnScreen()),
-        _tile(context, 'الأربعون النووية', Icons.menu_book,
-            const NawawiScreen()),
-        _tile(context, 'مساعد الحج والعمرة', Icons.mosque,
-            const HajjScreen()),
-      ],
+    return FutureBuilder<List<AdhkarItem>>(
+      future: f,
+      builder: (c, s) {
+        if (s.hasError) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: Center(child: Text('${s.error}')),
+          );
+        }
+        if (!s.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return AdhkarCards(
+          title: widget.morning ? 'أذكار الصباح' : 'أذكار المساء',
+          keyOf: (i) => adhkarKey(widget.morning, i),
+          items: [
+            for (final a in s.data!) CardItem(a.text, a.count, source: _src(a)),
+          ],
+        );
+      },
     );
   }
 }
