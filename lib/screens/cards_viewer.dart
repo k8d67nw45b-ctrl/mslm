@@ -213,6 +213,7 @@ class _AdhkarCardsState extends State<AdhkarCards> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: _sizes[fontIdx],
+fontFamily: 'Amiri',
                                 height: 1.9,
                                 color: ink,
                               ),
