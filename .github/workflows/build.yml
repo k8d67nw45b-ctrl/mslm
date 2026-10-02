@@ -32,6 +32,12 @@ jobs:
           test "$(ls assets/mushaf | wc -l)" -eq 604
           du -sh assets
 
+      - name: Download adhkar data
+        run: |
+          mkdir -p assets/data
+          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/adhkar_ar.json https://raw.githubusercontent.com/Seen-Arabic/Morning-And-Evening-Adhkar-DB/main/ar.json
+          python3 -c "import json; d=json.load(open('assets/data/adhkar_ar.json', encoding='utf-8')); print(type(d).__name__, len(d))"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -43,6 +49,102 @@ jobs:
 
       - name: Generate android folder
         run: flutter create --platforms=android --project-name muslm --org com.muslm .
+
+      - name: Generate app icon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-hosny-amiri || true
+          python3 -m venv /tmp/iv
+          /tmp/iv/bin/pip install pillow arabic-reshaper
+          /tmp/iv/bin/python - <<'PY'
+          import math, os, subprocess
+          from PIL import Image, ImageDraw, ImageFont
+          import arabic_reshaper
+
+          def ar(t):
+              return arabic_reshaper.reshape(t)[::-1]
+
+          def find_font():
+              out = subprocess.run(['fc-list', ':lang=ar', 'file'], capture_output=True, text=True).stdout
+              files = [l.split(':')[0].strip() for l in out.splitlines() if l.strip()]
+              files = [f for f in files if f.lower().endswith(('.ttf', '.otf'))]
+              for key in ('Amiri-Bold', 'Amiri', 'Naskh', 'DejaVuSans-Bold', 'DejaVuSans'):
+                  for f in files:
+                      if key in f:
+                          return f
+              if files:
+                  return files[0]
+              return '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+
+          S = 1024
+          GOLD = (255, 215, 106, 255)
+          img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+          grad = Image.new('RGB', (S, S))
+          gd = ImageDraw.Draw(grad)
+          top = (0, 92, 66)
+          bot = (8, 44, 34)
+          for y in range(S):
+              t = y / (S - 1)
+              c = tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3))
+              gd.line([(0, y), (S, y)], fill=c)
+          mask = Image.new('L', (S, S), 0)
+          ImageDraw.Draw(mask).rounded_rectangle([0, 0, S - 1, S - 1], radius=int(S * 0.22), fill=255)
+          img.paste(grad, (0, 0), mask)
+
+          cx = S // 2 - int(S * 0.03)
+          cy = int(S * 0.27)
+          r = int(S * 0.13)
+          cm = Image.new('L', (S, S), 0)
+          cd = ImageDraw.Draw(cm)
+          cd.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
+          k = int(r * 0.42)
+          rr = int(r * 0.86)
+          cd.ellipse([cx + k - rr, cy - rr, cx + k + rr, cy + rr], fill=0)
+          img.paste(Image.new('RGBA', (S, S), GOLD), (0, 0), cm)
+
+          d = ImageDraw.Draw(img)
+
+          def star(x, y, big, small):
+              pts = []
+              for i in range(10):
+                  a = -math.pi / 2 + i * math.pi / 5
+                  rad = big if i % 2 == 0 else small
+                  pts.append((x + rad * math.cos(a), y + rad * math.sin(a)))
+              return pts
+
+          d.polygon(star(cx + int(r * 0.55), cy - int(r * 0.05), int(r * 0.32), int(r * 0.13)), fill=GOLD)
+
+          fp = find_font()
+          print('font:', fp)
+
+          def fit(text, maxw, start):
+              size = start
+              while size > 40:
+                  f = ImageFont.truetype(fp, size, layout_engine=ImageFont.Layout.BASIC)
+                  if f.getlength(text) <= maxw:
+                      return f
+                  size -= 8
+              return ImageFont.truetype(fp, 40, layout_engine=ImageFont.Layout.BASIC)
+
+          w1 = ar('\u0631\u0641\u064a\u0642')
+          w2 = ar('\u0627\u0644\u0645\u0633\u0644\u0645')
+          f1 = fit(w1, int(S * 0.62), 300)
+          f2 = fit(w2, int(S * 0.74), 300)
+          d.text((S // 2, int(S * 0.56)), w1, font=f1, fill=(255, 255, 255, 255), anchor='mm')
+          d.text((S // 2, int(S * 0.78)), w2, font=f2, fill=GOLD, anchor='mm')
+
+          sizes = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
+          for name, px in sizes.items():
+              folder = 'android/app/src/main/res/mipmap-' + name
+              os.makedirs(folder, exist_ok=True)
+              img.resize((px, px), Image.Resampling.LANCZOS).save(folder + '/ic_launcher.png')
+          img.save('/tmp/icon.png')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: icon-preview
+          path: /tmp/icon.png
 
       - name: Configure Android manifest
         run: |
@@ -56,7 +158,7 @@ jobs:
                    '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>')
           if 'permission.INTERNET' not in s:
               s = s.replace('<application', perms + '<application', 1)
-          s = s.replace('android:label="muslm"', 'android:label="مسلم"')
+          s = s.replace('android:label="muslm"', 'android:label="\u0631\u0641\u064a\u0642 \u0627\u0644\u0645\u0633\u0644\u0645"')
           open(p, 'w', encoding='utf-8').write(s)
           PY
           cat $M
