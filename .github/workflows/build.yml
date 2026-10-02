@@ -255,4 +255,29 @@ jobs:
           perms = ''.join('<uses-permission android:name="android.permission.%s"/>' % n for n in names)
           s = s.replace('<application', perms + '<application', 1)
           rec = ('<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />'
-                 '
+                 '<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">'
+                 '<intent-filter>'
+                 '<action android:name="android.intent.action.BOOT_COMPLETED"/>'
+                 '<action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>'
+                 '<action android:name="android.intent.action.QUICKBOOT_POWERON"/>'
+                 '<action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>'
+                 '</intent-filter></receiver>')
+          s = s.replace('</application>', rec + '</application>', 1)
+          s = s.replace('android:label="muslm"', 'android:label="\u0631\u0641\u064a\u0642 \u0627\u0644\u0645\u0633\u0644\u0645"')
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+          cat $M
+          grep -q "permission.INTERNET" $M
+
+      - run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --obfuscate --split-debug-info=build/debug-info
+
+      - name: APK size
+        run: ls -lh build/app/outputs/flutter-apk/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: muslm-apk
+          path: build/app/outputs/flutter-apk/*-release.apk
