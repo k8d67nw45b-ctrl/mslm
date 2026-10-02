@@ -18,8 +18,7 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v2
-
+          key: quran-assets-v3
       - name: Download Quran assets
         if: steps.qcache.outputs.cache-hit != 'true'
         run: |
