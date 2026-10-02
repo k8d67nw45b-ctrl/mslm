@@ -1,12 +1,5 @@
 import 'package:flutter/material.dart';
 
-const _invert = ColorFilter.matrix(<double>[
-  -1, 0, 0, 0, 255,
-  0, -1, 0, 0, 255,
-  0, 0, -1, 0, 255,
-  0, 0, 0, 1, 0,
-]);
-
 class MushafPage extends StatefulWidget {
   final int page;
   final bool dark;
@@ -55,17 +48,6 @@ class MushafPageState extends State<MushafPage> {
 
   @override
   Widget build(BuildContext context) {
-    final img = Image.asset(
-      'assets/mushaf/p${widget.page}.webp',
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (c, e, s) => const Center(
-        child: Text('الصفحة غير موجودة داخل التطبيق'),
-      ),
-    );
-    final shown = widget.dark
-        ? ColorFiltered(colorFilter: _invert, child: img)
-        : img;
     return InteractiveViewer(
       transformationController: _c,
       minScale: 1,
@@ -79,7 +61,16 @@ class MushafPageState extends State<MushafPage> {
         child: SizedBox(
           width: double.infinity,
           height: double.infinity,
-          child: shown,
+          child: Image.asset(
+            'assets/mushaf/p${widget.page}.webp',
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            color: widget.dark ? Colors.white : null,
+            colorBlendMode: widget.dark ? BlendMode.difference : null,
+            errorBuilder: (c, e, s) => const Center(
+              child: Text('الصفحة غير موجودة داخل التطبيق'),
+            ),
+          ),
         ),
       ),
     );
