@@ -22,44 +22,60 @@ jobs:
 
       - name: Download Quran assets
         if: steps.qcache.outputs.cache-hit != 'true'
-        env:
-          Q: '85'
-          MAXW: '1500'
         run: |
           sudo apt-get update
-          sudo apt-get install -y webp imagemagick
+          sudo apt-get install -y webp
           mkdir -p assets/mushaf assets/data
-          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/quran_uthmani.json https://api.alquran.cloud/v1/quran/quran-uthmani
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/quran_uthmani.json https://api.alquran.cloud/v1/quran/quran-uthmani
           python3 -c "import json; d=json.load(open('assets/data/quran_uthmani.json')); assert len(d['data']['surahs'])==114"
           cat > /tmp/conv.sh <<'SH'
           #!/bin/sh
           p="$1"
-          curl -fsSL --retry 5 --retry-delay 3 -o "/tmp/p$p.png" "https://cdn.jsdelivr.net/gh/SakinaDevGroup/mushaf-madani-cdn@main/light/p$p.png" || exit 1
-          convert "/tmp/p$p.png" -resize "${MAXW}x>" "/tmp/q$p.png" || exit 1
-          cwebp -quiet -q "$Q" -m 6 "/tmp/q$p.png" -o "assets/mushaf/p$p.webp" || exit 1
+          ok=0
+          for i in 1 2 3 4 5 6; do
+            for base in "https://cdn.jsdelivr.net/gh/SakinaDevGroup/mushaf-madani-cdn@main" "https://raw.githubusercontent.com/SakinaDevGroup/mushaf-madani-cdn/main"; do
+              if curl -fsSL --max-time 90 -o "/tmp/p$p.png" "$base/light/p$p.png"; then
+                ok=1
+                break
+              fi
+            done
+            if [ "$ok" = 1 ]; then
+              break
+            fi
+            sleep $((i * 2))
+          done
+          if [ "$ok" != 1 ]; then
+            echo "FAILED page $p"
+            exit 1
+          fi
+          cwebp -quiet -lossless -z 9 "/tmp/p$p.png" -o "assets/mushaf/p$p.webp" || exit 1
           if [ "$p" = 1 ] || [ "$p" = 300 ]; then
             file "/tmp/p$p.png"
-            file "/tmp/q$p.png"
             ls -l "/tmp/p$p.png" "assets/mushaf/p$p.webp"
           fi
-          rm -f "/tmp/p$p.png" "/tmp/q$p.png"
+          rm -f "/tmp/p$p.png"
           SH
           chmod +x /tmp/conv.sh
-          seq 1 604 | xargs -P 8 -n 1 /tmp/conv.sh
+          seq 1 604 | xargs -P 4 -n 1 /tmp/conv.sh || true
+          for p in $(seq 1 604); do
+            if [ ! -f assets/mushaf/p$p.webp ]; then
+              /tmp/conv.sh $p
+            fi
+          done
           test "$(ls assets/mushaf | wc -l)" -eq 604
           du -sh assets/mushaf
 
       - name: Download adhkar data
         run: |
           mkdir -p assets/data
-          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/adhkar_ar.json https://raw.githubusercontent.com/Seen-Arabic/Morning-And-Evening-Adhkar-DB/main/ar.json
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/adhkar_ar.json https://raw.githubusercontent.com/Seen-Arabic/Morning-And-Evening-Adhkar-DB/main/ar.json
           python3 -c "import json; d=json.load(open('assets/data/adhkar_ar.json', encoding='utf-8')); print(type(d).__name__, len(d))"
 
       - name: Download hisn and nawawi
         run: |
           mkdir -p assets/data
-          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/hisn_almuslim.json https://raw.githubusercontent.com/rn0x/hisn_almuslim_json/main/hisn_almuslim.json
-          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/nawawi.json https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-nawawi.json
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/hisn_almuslim.json https://raw.githubusercontent.com/rn0x/hisn_almuslim_json/main/hisn_almuslim.json
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/nawawi.json https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-nawawi.json
           python3 -c "import json; d=json.load(open('assets/data/hisn_almuslim.json', encoding='utf-8')); print('hisn', len(d))"
           python3 -c "import json; d=json.load(open('assets/data/nawawi.json', encoding='utf-8')); print('nawawi', len(d['hadiths']))"
 
@@ -73,7 +89,7 @@ jobs:
           channel: stable
 
       - name: Generate android folder
-        run: flutter create . --org com.muslm --project-name muslm
+        run: flutter create --platforms=android --project-name muslm --org com.muslm .
 
       - name: Patch gradle
         run: |
@@ -213,10 +229,10 @@ jobs:
         run: |
           mkdir -p assets/fonts
           for n in Regular Medium Bold; do
-            curl -fsSL --retry 5 --retry-delay 3 -o assets/fonts/Tajawal-$n.ttf https://raw.githubusercontent.com/googlefonts/tajawal/main/fonts/ttf/Tajawal-$n.ttf
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/fonts/Tajawal-$n.ttf https://raw.githubusercontent.com/googlefonts/tajawal/main/fonts/ttf/Tajawal-$n.ttf
           done
           for n in Regular Bold; do
-            curl -fsSL --retry 5 --retry-delay 3 -o assets/fonts/Amiri-$n.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-$n.ttf || cp "$(find /usr/share/fonts -name "Amiri-$n.ttf" | head -1)" assets/fonts/Amiri-$n.ttf
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/fonts/Amiri-$n.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-$n.ttf || cp "$(find /usr/share/fonts -name "Amiri-$n.ttf" | head -1)" assets/fonts/Amiri-$n.ttf
           done
           ls -l assets/fonts
           test "$(ls assets/fonts | wc -l)" -eq 5
@@ -239,29 +255,4 @@ jobs:
           perms = ''.join('<uses-permission android:name="android.permission.%s"/>' % n for n in names)
           s = s.replace('<application', perms + '<application', 1)
           rec = ('<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />'
-                 '<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">'
-                 '<intent-filter>'
-                 '<action android:name="android.intent.action.BOOT_COMPLETED"/>'
-                 '<action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>'
-                 '<action android:name="android.intent.action.QUICKBOOT_POWERON"/>'
-                 '<action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>'
-                 '</intent-filter></receiver>')
-          s = s.replace('</application>', rec + '</application>', 1)
-          s = s.replace('android:label="muslm"', 'android:label="\u0631\u0641\u064a\u0642 \u0627\u0644\u0645\u0633\u0644\u0645"')
-          open(p, 'w', encoding='utf-8').write(s)
-          PY
-          cat $M
-          grep -q "permission.INTERNET" $M
-
-      - run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --obfuscate --split-debug-info=build/debug-info
-
-      - name: APK size
-        run: ls -lh build/app/outputs/flutter-apk/*.apk
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: muslm-apk
-          path: build/app/outputs/flutter-apk/*-release.apk
+                 '
