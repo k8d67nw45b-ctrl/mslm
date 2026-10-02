@@ -28,12 +28,13 @@ class _QuranScreenState extends State<QuranScreen> {
     try {
       final s = await loadSurahItems();
       final l = await getLastPage();
+      if (!mounted) return;
       setState(() {
         surahs = s;
         last = l;
       });
     } catch (e) {
-      setState(() => error = e.toString());
+      if (mounted) setState(() => error = e.toString());
     }
   }
 
@@ -45,7 +46,7 @@ class _QuranScreenState extends State<QuranScreen> {
       ),
     );
     final l = await getLastPage();
-    setState(() => last = l);
+    if (mounted) setState(() => last = l);
   }
 
   @override
@@ -68,47 +69,52 @@ class _QuranScreenState extends State<QuranScreen> {
     if (surahs == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    return ListView(
-      padding: const EdgeInsets.all(kPaddingMedium),
-      children: [
-        Card(
-          color: kCardBackground,
-          margin: const EdgeInsets.only(bottom: kPaddingMedium),
-          child: ListTile(
-            leading: const Icon(Icons.bookmarks, color: kGreen),
-            title: const Text('نقاط الحفظ'),
-            trailing: const Icon(Icons.chevron_left, color: kGreen),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BookmarksScreen()),
-            ),
+    final list = surahs!;
+    final head = <Widget>[
+      Card(
+        color: kCardBackground,
+        margin: const EdgeInsets.only(bottom: kPaddingMedium),
+        child: ListTile(
+          leading: const Icon(Icons.bookmarks, color: kGreen),
+          title: const Text('نقاط الحفظ'),
+          trailing: const Icon(Icons.chevron_left, color: kGreen),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BookmarksScreen()),
           ),
         ),
-        if (last != null)
-          Card(
-            color: kGreen,
-            margin: const EdgeInsets.only(bottom: kPaddingMedium),
-            child: ListTile(
-              title: Text('متابعة القراءة: صفحة $last'),
-              trailing: const Icon(Icons.chevron_left),
-              onTap: () => _open(last!),
-            ),
+      ),
+      if (last != null)
+        Card(
+          color: kGreen,
+          margin: const EdgeInsets.only(bottom: kPaddingMedium),
+          child: ListTile(
+            title: Text('متابعة القراءة: صفحة $last'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => _open(last!),
           ),
-        for (final s in surahs!)
-          Card(
-            color: kCardBackground,
-            margin: const EdgeInsets.only(bottom: kPaddingSmall),
-            child: ListTile(
-              leading: Text(
-                '${s.number}',
-                style: const TextStyle(color: kGreen, fontSize: 18),
-              ),
-              title: Text(s.name, style: const TextStyle(fontSize: 20)),
-              subtitle: Text('${s.ayahs} آية، صفحة ${s.page}'),
-              onTap: () => _open(s.page),
+        ),
+    ];
+    return ListView.builder(
+      padding: const EdgeInsets.all(kPaddingMedium),
+      itemCount: head.length + list.length,
+      itemBuilder: (context, i) {
+        if (i < head.length) return head[i];
+        final s = list[i - head.length];
+        return Card(
+          color: kCardBackground,
+          margin: const EdgeInsets.only(bottom: kPaddingSmall),
+          child: ListTile(
+            leading: Text(
+              '${s.number}',
+              style: const TextStyle(color: kGreen, fontSize: 18),
             ),
+            title: Text(s.name, style: const TextStyle(fontSize: 20)),
+            subtitle: Text('${s.ayahs} آية، صفحة ${s.page}'),
+            onTap: () => _open(s.page),
           ),
-      ],
+        );
+      },
     );
   }
 }
