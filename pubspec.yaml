@@ -23,6 +23,8 @@ dependencies:
   audioplayers: ^6.1.0
   share_plus: ^10.1.4
   path_provider: ^2.1.5
+  flutter_local_notifications: 18.0.1
+  timezone: any
 
 dev_dependencies:
   flutter_test:
@@ -34,3 +36,16 @@ flutter:
   assets:
     - assets/mushaf/
     - assets/data/
+  fonts:
+    - family: Tajawal
+      fonts:
+        - asset: assets/fonts/Tajawal-Regular.ttf
+        - asset: assets/fonts/Tajawal-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Tajawal-Bold.ttf
+          weight: 700
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri-Regular.ttf
+        - asset: assets/fonts/Amiri-Bold.ttf
+          weight: 700
