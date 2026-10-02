@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
+import 'daily_adhkar_screen.dart';
 import 'hisn_screen.dart';
 import 'nawawi_screen.dart';
 import 'hajj_screen.dart';
@@ -29,6 +30,10 @@ class AdhkarScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(kPaddingMedium),
       children: [
+        _tile(context, 'أذكار الصباح', Icons.wb_sunny,
+            const DailyAdhkarScreen(morning: true)),
+        _tile(context, 'أذكار المساء', Icons.nights_stay,
+            const DailyAdhkarScreen(morning: false)),
         _tile(context, 'حصن المسلم', Icons.favorite, const HisnScreen()),
         _tile(context, 'الأربعون النووية', Icons.menu_book,
             const NawawiScreen()),
