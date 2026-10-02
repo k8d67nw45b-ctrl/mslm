@@ -21,6 +21,14 @@ class _MushafReaderState extends State<MushafReader> {
   late final PageController _pc;
   late int page;
   bool zoomed = false;
+  final Map<int, GlobalKey<MushafPageState>> _keys = {};
+
+  GlobalKey<MushafPageState> _key(int i) =>
+      _keys.putIfAbsent(i, () => GlobalKey<MushafPageState>());
+
+  void _zoom(double factor) {
+    _keys[page - 1]?.currentState?.zoomBy(factor);
+  }
 
   @override
   void initState() {
@@ -80,6 +88,14 @@ class _MushafReaderState extends State<MushafReader> {
         title: Text('صفحة $page'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.zoom_out),
+            onPressed: () => _zoom(1 / 1.5),
+          ),
+          IconButton(
+            icon: const Icon(Icons.zoom_in),
+            onPressed: () => _zoom(1.5),
+          ),
+          IconButton(
             icon: const Icon(Icons.bookmarks_outlined),
             onPressed: () => Navigator.push(
               context,
@@ -102,7 +118,7 @@ class _MushafReaderState extends State<MushafReader> {
           saveLastPage(i + 1);
         },
         itemBuilder: (context, i) => MushafPage(
-          key: ValueKey(i),
+          key: _key(i),
           page: i + 1,
           dark: dark,
           onZoom: (z) => setState(() => zoomed = z),
