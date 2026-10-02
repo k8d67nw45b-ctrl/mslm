@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-const String appName = 'مسلم';
+const String appName = 'رفيق المسلم';
 
 // الألوان
 const Color kGreen = Color(0xFF10B981);
