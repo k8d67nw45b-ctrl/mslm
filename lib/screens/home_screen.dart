@@ -61,19 +61,37 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        type: BottomNavigationBarType.fixed,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
         backgroundColor: kCardBackground,
-        selectedItemColor: kGreen,
-        unselectedItemColor: Colors.grey,
-        onTap: (i) => setState(() => _selectedIndex = i),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_book), label: 'القرآن'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'الأذكار'),
-          BottomNavigationBarItem(icon: Icon(Icons.access_time), label: 'الصلاة'),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'القبلة'),
+        indicatorColor: kGreen.withOpacity(0.25),
+        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'القرآن',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.favorite_border),
+            selectedIcon: Icon(Icons.favorite),
+            label: 'الأذكار',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.access_time),
+            selectedIcon: Icon(Icons.access_time_filled),
+            label: 'الصلاة',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
+            label: 'القبلة',
+          ),
         ],
       ),
     );
