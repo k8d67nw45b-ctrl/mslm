@@ -18,7 +18,7 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v2
+          key: quran-assets-v3
 
       - name: Download Quran assets
         if: steps.qcache.outputs.cache-hit != 'true'
@@ -48,7 +48,7 @@ jobs:
             echo "FAILED page $p"
             exit 1
           fi
-          cwebp -quiet -lossless -z 9 "/tmp/p$p.png" -o "assets/mushaf/p$p.webp" || exit 1
+          cwebp -quiet -lossless -near_lossless 60 -z 9 "/tmp/p$p.png" -o "assets/mushaf/p$p.webp" || exit 1
           if [ "$p" = 1 ] || [ "$p" = 300 ]; then
             file "/tmp/p$p.png"
             ls -l "/tmp/p$p.png" "assets/mushaf/p$p.webp"
@@ -277,7 +277,12 @@ jobs:
       - name: APK size
         run: ls -lh build/app/outputs/flutter-apk/*.apk
 
+            - uses: actions/upload-artifact@v4
+        with:
+          name: apk-arm64
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: muslm-apk
-          path: build/app/outputs/flutter-apk/*-release.apk
+          name: apk-armv7
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
