@@ -18,19 +18,36 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v1
+          key: quran-assets-v2
 
       - name: Download Quran assets
         if: steps.qcache.outputs.cache-hit != 'true'
+        env:
+          Q: '85'
+          MAXW: '1500'
         run: |
           sudo apt-get update
-          sudo apt-get install -y webp
+          sudo apt-get install -y webp imagemagick
           mkdir -p assets/mushaf assets/data
           curl -fsSL --retry 5 --retry-delay 3 -o assets/data/quran_uthmani.json https://api.alquran.cloud/v1/quran/quran-uthmani
           python3 -c "import json; d=json.load(open('assets/data/quran_uthmani.json')); assert len(d['data']['surahs'])==114"
-          seq 1 604 | xargs -P 8 -I{} sh -c 'curl -fsSL --retry 5 --retry-delay 3 -o /tmp/p{}.png "https://cdn.jsdelivr.net/gh/SakinaDevGroup/mushaf-madani-cdn@main/light/p{}.png" && cwebp -quiet -q 90 /tmp/p{}.png -o assets/mushaf/p{}.webp && rm /tmp/p{}.png'
+          cat > /tmp/conv.sh <<'SH'
+          #!/bin/sh
+          p="$1"
+          curl -fsSL --retry 5 --retry-delay 3 -o "/tmp/p$p.png" "https://cdn.jsdelivr.net/gh/SakinaDevGroup/mushaf-madani-cdn@main/light/p$p.png" || exit 1
+          convert "/tmp/p$p.png" -resize "${MAXW}x>" "/tmp/q$p.png" || exit 1
+          cwebp -quiet -q "$Q" -m 6 "/tmp/q$p.png" -o "assets/mushaf/p$p.webp" || exit 1
+          if [ "$p" = 1 ] || [ "$p" = 300 ]; then
+            file "/tmp/p$p.png"
+            file "/tmp/q$p.png"
+            ls -l "/tmp/p$p.png" "assets/mushaf/p$p.webp"
+          fi
+          rm -f "/tmp/p$p.png" "/tmp/q$p.png"
+          SH
+          chmod +x /tmp/conv.sh
+          seq 1 604 | xargs -P 8 -n 1 /tmp/conv.sh
           test "$(ls assets/mushaf | wc -l)" -eq 604
-          du -sh assets
+          du -sh assets/mushaf
 
       - name: Download adhkar data
         run: |
@@ -239,12 +256,12 @@ jobs:
       - run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --obfuscate --split-debug-info=build/debug-info
 
       - name: APK size
-        run: ls -lh build/app/outputs/flutter-apk/app-release.apk
+        run: ls -lh build/app/outputs/flutter-apk/*.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: muslm-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*-release.apk
