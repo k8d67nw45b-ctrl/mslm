@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,17 +13,9 @@ class HisnSection {
   HisnSection(this.title, this.texts, this.notes);
 }
 
-Future<List<HisnSection>> loadHisn() async {
-  final prefs = await SharedPreferences.getInstance();
-  var raw = prefs.getString('hisn_json');
-  if (raw == null) {
-    final r = await http.get(Uri.parse(_url));
-    if (r.statusCode != 200) {
-      throw 'تعذّر الاتصال، تأكد من الإنترنت';
-    }
-    raw = utf8.decode(r.bodyBytes);
-    await prefs.setString('hisn_json', raw);
-  }
+List<HisnSection>? _cache;
+
+List<HisnSection> _parse(String raw) {
   final map = jsonDecode(raw) as Map<String, dynamic>;
   final out = <HisnSection>[];
   map.forEach((k, v) {
@@ -34,6 +27,29 @@ Future<List<HisnSection>> loadHisn() async {
     ));
   });
   return out;
+}
+
+Future<List<HisnSection>> loadHisn() async {
+  if (_cache != null) return _cache!;
+  try {
+    final raw = await rootBundle.loadString('assets/data/hisn_almuslim.json');
+    _cache = _parse(raw);
+    return _cache!;
+  } catch (_) {}
+  final prefs = await SharedPreferences.getInstance();
+  var raw = prefs.getString('hisn_json');
+  if (raw == null) {
+    final r = await http
+        .get(Uri.parse(_url))
+        .timeout(const Duration(seconds: 15));
+    if (r.statusCode != 200) {
+      throw 'تعذّر الاتصال، تأكد من الإنترنت';
+    }
+    raw = utf8.decode(r.bodyBytes);
+    await prefs.setString('hisn_json', raw);
+  }
+  _cache = _parse(raw);
+  return _cache!;
 }
 
 int countOf(String t) {
