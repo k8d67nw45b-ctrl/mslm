@@ -38,6 +38,14 @@ jobs:
           curl -fsSL --retry 5 --retry-delay 3 -o assets/data/adhkar_ar.json https://raw.githubusercontent.com/Seen-Arabic/Morning-And-Evening-Adhkar-DB/main/ar.json
           python3 -c "import json; d=json.load(open('assets/data/adhkar_ar.json', encoding='utf-8')); print(type(d).__name__, len(d))"
 
+      - name: Download hisn and nawawi
+        run: |
+          mkdir -p assets/data
+          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/hisn_almuslim.json https://raw.githubusercontent.com/rn0x/hisn_almuslim_json/main/hisn_almuslim.json
+          curl -fsSL --retry 5 --retry-delay 3 -o assets/data/nawawi.json https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-nawawi.json
+          python3 -c "import json; d=json.load(open('assets/data/hisn_almuslim.json', encoding='utf-8')); print('hisn', len(d))"
+          python3 -c "import json; d=json.load(open('assets/data/nawawi.json', encoding='utf-8')); print('nawawi', len(d['hadiths']))"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -49,6 +57,29 @@ jobs:
 
       - name: Generate android folder
         run: flutter create --platforms=android --project-name muslm --org com.muslm .
+
+      - name: Patch gradle
+        run: |
+          python3 - <<'PY'
+          import os
+          for fn in ('android/app/build.gradle.kts', 'android/app/build.gradle'):
+              if not os.path.exists(fn):
+                  continue
+              s = open(fn, encoding='utf-8').read()
+              kts = fn.endswith('.kts')
+              flag = 'isCoreLibraryDesugaringEnabled = true' if kts else 'coreLibraryDesugaringEnabled true'
+              if 'oreLibraryDesugaringEnabled' not in s:
+                  s = s.replace('compileOptions {', 'compileOptions {\n        ' + flag, 1)
+              if kts:
+                  dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+              else:
+                  dep = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+              if 'desugar_jdk_libs' not in s:
+                  s += '\ndependencies {\n    ' + dep + '\n}\n'
+              open(fn, 'w', encoding='utf-8').write(s)
+              print('patched', fn)
+          PY
+          cat android/app/build.gradle* | head -80
 
       - name: Generate app icon
         run: |
@@ -78,6 +109,7 @@ jobs:
 
           S = 1024
           GOLD = (255, 215, 106, 255)
+          WHITE = (255, 255, 255, 255)
           img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
           grad = Image.new('RGB', (S, S))
           gd = ImageDraw.Draw(grad)
@@ -112,7 +144,9 @@ jobs:
                   pts.append((x + rad * math.cos(a), y + rad * math.sin(a)))
               return pts
 
-          d.polygon(star(cx + int(r * 0.55), cy - int(r * 0.05), int(r * 0.32), int(r * 0.13)), fill=GOLD)
+          sx = cx + int(r * 0.55)
+          sy = cy - int(r * 0.05)
+          d.polygon(star(sx, sy, int(r * 0.32), int(r * 0.13)), fill=GOLD)
 
           fp = find_font()
           print('font:', fp)
@@ -130,7 +164,7 @@ jobs:
           w2 = ar('\u0627\u0644\u0645\u0633\u0644\u0645')
           f1 = fit(w1, int(S * 0.62), 300)
           f2 = fit(w2, int(S * 0.74), 300)
-          d.text((S // 2, int(S * 0.56)), w1, font=f1, fill=(255, 255, 255, 255), anchor='mm')
+          d.text((S // 2, int(S * 0.56)), w1, font=f1, fill=WHITE, anchor='mm')
           d.text((S // 2, int(S * 0.78)), w2, font=f2, fill=GOLD, anchor='mm')
 
           sizes = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
@@ -139,7 +173,36 @@ jobs:
               os.makedirs(folder, exist_ok=True)
               img.resize((px, px), Image.Resampling.LANCZOS).save(folder + '/ic_launcher.png')
           img.save('/tmp/icon.png')
+
+          small = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+          small.paste(Image.new('RGBA', (S, S), WHITE), (0, 0), cm)
+          ImageDraw.Draw(small).polygon(star(sx, sy, int(r * 0.32), int(r * 0.13)), fill=WHITE)
+          crop = small.crop(small.getbbox())
+          w, h = crop.size
+          m = max(w, h)
+          sq = Image.new('RGBA', (m, m), (0, 0, 0, 0))
+          sq.paste(crop, ((m - w) // 2, (m - h) // 2))
+          for name, px in {'mdpi': 24, 'hdpi': 36, 'xhdpi': 48, 'xxhdpi': 72, 'xxxhdpi': 96}.items():
+              inner = int(px * 0.84)
+              t = sq.resize((inner, inner), Image.Resampling.LANCZOS)
+              canvas = Image.new('RGBA', (px, px), (0, 0, 0, 0))
+              canvas.paste(t, ((px - inner) // 2, (px - inner) // 2), t)
+              folder = 'android/app/src/main/res/drawable-' + name
+              os.makedirs(folder, exist_ok=True)
+              canvas.save(folder + '/ic_stat.png')
           PY
+
+      - name: Download fonts
+        run: |
+          mkdir -p assets/fonts
+          for n in Regular Medium Bold; do
+            curl -fsSL --retry 5 --retry-delay 3 -o assets/fonts/Tajawal-$n.ttf https://raw.githubusercontent.com/googlefonts/tajawal/main/fonts/ttf/Tajawal-$n.ttf
+          done
+          for n in Regular Bold; do
+            curl -fsSL --retry 5 --retry-delay 3 -o assets/fonts/Amiri-$n.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-$n.ttf || cp "$(find /usr/share/fonts -name "Amiri-$n.ttf" | head -1)" assets/fonts/Amiri-$n.ttf
+          done
+          ls -l assets/fonts
+          test "$(ls assets/fonts | wc -l)" -eq 5
 
       - uses: actions/upload-artifact@v4
         with:
@@ -153,11 +216,20 @@ jobs:
           import sys
           p = sys.argv[1]
           s = open(p, encoding='utf-8').read()
-          perms = ('<uses-permission android:name="android.permission.INTERNET"/>'
-                   '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>'
-                   '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>')
-          if 'permission.INTERNET' not in s:
-              s = s.replace('<application', perms + '<application', 1)
+          names = ['INTERNET', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION',
+                   'POST_NOTIFICATIONS', 'SCHEDULE_EXACT_ALARM', 'USE_EXACT_ALARM',
+                   'RECEIVE_BOOT_COMPLETED', 'VIBRATE']
+          perms = ''.join('<uses-permission android:name="android.permission.%s"/>' % n for n in names)
+          s = s.replace('<application', perms + '<application', 1)
+          rec = ('<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />'
+                 '<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">'
+                 '<intent-filter>'
+                 '<action android:name="android.intent.action.BOOT_COMPLETED"/>'
+                 '<action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>'
+                 '<action android:name="android.intent.action.QUICKBOOT_POWERON"/>'
+                 '<action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>'
+                 '</intent-filter></receiver>')
+          s = s.replace('</application>', rec + '</application>', 1)
           s = s.replace('android:label="muslm"', 'android:label="\u0631\u0641\u064a\u0642 \u0627\u0644\u0645\u0633\u0644\u0645"')
           open(p, 'w', encoding='utf-8').write(s)
           PY
