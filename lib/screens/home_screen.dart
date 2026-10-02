@@ -19,13 +19,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = const [
-    HomeTab(),
-    QuranScreen(),
-    AdhkarScreen(),
-    PrayerScreen(),
-    QiblaScreen(),
-  ];
+  Widget _tab(int i) {
+    switch (i) {
+      case 1:
+        return const QuranScreen();
+      case 2:
+        return const AdhkarScreen();
+      case 3:
+        return const PrayerScreen();
+      default:
+        return const QiblaScreen();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +47,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-      body: IndexedStack(index: _selectedIndex, children: _screens),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Offstage(
+            offstage: _selectedIndex != 0,
+            child: HomeTab(active: _selectedIndex == 0),
+          ),
+          if (_selectedIndex != 0)
+            KeyedSubtree(
+              key: ValueKey(_selectedIndex),
+              child: _tab(_selectedIndex),
+            ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         type: BottomNavigationBarType.fixed,
