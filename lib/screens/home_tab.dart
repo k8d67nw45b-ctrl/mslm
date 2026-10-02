@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import '../core/theme_controller.dart';
+import 'daily_adhkar.dart';
+import 'daily_adhkar_screen.dart';
 import 'daily_content.dart';
 import 'hajj_screen.dart';
 import 'hisn_detail.dart';
@@ -96,7 +98,7 @@ class _HomeTabState extends State<HomeTab> {
 
   Future<void> _loadMisc() async {
     final l = await getLastPage();
-    final p = await morningProgress();
+    final p = await todayAdhkarProgress();
     if (!mounted) return;
     setState(() {
       lastPage = l;
@@ -112,28 +114,39 @@ class _HomeTabState extends State<HomeTab> {
     _loadMisc();
   }
 
-  Future<void> _openSection(String part) async {
+  Future<void> _openSleep() async {
     try {
       final all = await loadHisn();
-      final s = all.firstWhere((e) => e.title.contains(part));
+      final s = all.firstWhere((e) => e.title.contains('أذكار النوم'));
       if (!mounted) return;
       await _go(HisnDetail(sec: s));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('يلزم الإنترنت أول مرة لتحميل الأذكار'),
+          content: Text('يلزم الإنترنت أول مرة لتحميل أذكار النوم'),
         ),
       );
+    }
+  }
+
+  void _openNow() {
+    final h = DateTime.now().hour;
+    if (h < 12) {
+      _go(const DailyAdhkarScreen(morning: true));
+    } else if (h < 22) {
+      _go(const DailyAdhkarScreen(morning: false));
+    } else {
+      _openSleep();
     }
   }
 
   List<Shortcut> _shortcuts() {
     return [
       Shortcut('أذكار المساء', Icons.nights_stay, const Color(0xFFDDDCEB),
-          () => _openSection('الصباح والمساء')),
+          () => _go(const DailyAdhkarScreen(morning: false))),
       Shortcut('أذكار الصباح', Icons.wb_sunny, const Color(0xFFF1DDD8),
-          () => _openSection('الصباح والمساء')),
+          () => _go(const DailyAdhkarScreen(morning: true))),
       Shortcut('المسبحة', Icons.touch_app, const Color(0xFFE8E8DC),
           () => _go(const TasbihScreen())),
       Shortcut(
@@ -191,8 +204,6 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final hour = DateTime.now().hour;
-    final part = hour < 22 ? 'الصباح والمساء' : 'أذكار النوم';
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
@@ -204,7 +215,7 @@ class _HomeTabState extends State<HomeTab> {
             const SnackBar(content: Text('الإشعارات قيد الإضافة')),
           ),
           onTheme: ThemeController.toggle,
-          onAdhkar: () => _openSection(part),
+          onAdhkar: _openNow,
         ),
         SectionTitle(
           'أوقات الصلاة',
@@ -226,7 +237,9 @@ class _HomeTabState extends State<HomeTab> {
         ),
         ProgressCard(
           progress: progress,
-          onTap: () => _openSection('الصباح والمساء'),
+          onTap: () => _go(
+            DailyAdhkarScreen(morning: DateTime.now().hour < 12),
+          ),
         ),
         if (verse != null)
           DailyCard(label: 'آية اليوم', icon: Icons.menu_book, item: verse!),
