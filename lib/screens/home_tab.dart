@@ -19,10 +19,12 @@ import 'nawawi_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
 import 'qibla_screen.dart';
+import 'ruqyah_screen.dart';
 import 'tasbih_screen.dart';
 
 class HomeTab extends StatefulWidget {
-  const HomeTab({Key? key}) : super(key: key);
+  final bool active;
+  const HomeTab({Key? key, this.active = true}) : super(key: key);
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -32,7 +34,8 @@ class _HomeTabState extends State<HomeTab> {
   PrayerData? data;
   String? error;
   NextInfo? next;
-  Duration left = Duration.zero;
+  final ValueNotifier<Duration> leftN =
+      ValueNotifier<Duration>(Duration.zero);
   DailyItem? verse;
   DailyItem? hadith;
   DailyItem? dua;
@@ -51,8 +54,18 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   @override
+  void didUpdateWidget(covariant HomeTab old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      _tick();
+      _loadMisc();
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
+    leftN.dispose();
     super.dispose();
   }
 
@@ -73,7 +86,7 @@ class _HomeTabState extends State<HomeTab> {
 
   void _tick() {
     final d = data;
-    if (d == null || !mounted) return;
+    if (d == null || !mounted || !widget.active) return;
     final now = DateTime.now();
     if (now.day != _day) {
       _day = now.day;
@@ -81,10 +94,10 @@ class _HomeTabState extends State<HomeTab> {
       return;
     }
     final n = nextOf(d.times);
-    setState(() {
-      next = n;
-      left = n.time.difference(now);
-    });
+    if (next == null || next!.name != n.name) {
+      setState(() => next = n);
+    }
+    leftN.value = n.time.difference(now);
   }
 
   Future<void> _loadDaily() async {
@@ -160,6 +173,8 @@ class _HomeTabState extends State<HomeTab> {
           ),
         ),
       ),
+      Shortcut('الرقية الشرعية', Icons.healing, const Color(0xFFE6DCEB),
+          () => _go(const RuqyahScreen())),
       Shortcut('حصن المسلم', Icons.favorite, const Color(0xFFDCEBE3),
           () => _go(const HisnScreen())),
       Shortcut('الأربعون النووية', Icons.menu_book, const Color(0xFFE3EBDC),
@@ -177,7 +192,11 @@ class _HomeTabState extends State<HomeTab> {
     if (d != null && n != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: PrayerGrid(times: d.times, next: n, left: left),
+        child: ValueListenableBuilder<Duration>(
+          valueListenable: leftN,
+          builder: (context, left, _) =>
+              PrayerGrid(times: d.times, next: n, left: left),
+        ),
       );
     }
     if (error != null) {
@@ -207,15 +226,18 @@ class _HomeTabState extends State<HomeTab> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        HomeHeader(
-          next: next,
-          left: left,
-          onSearch: () => _go(const HisnScreen()),
-          onBell: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('الإشعارات قيد الإضافة')),
+        ValueListenableBuilder<Duration>(
+          valueListenable: leftN,
+          builder: (context, left, _) => HomeHeader(
+            next: next,
+            left: left,
+            onSearch: () => _go(const HisnScreen()),
+            onBell: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('الإشعارات قيد الإضافة')),
+            ),
+            onTheme: ThemeController.toggle,
+            onAdhkar: _openNow,
           ),
-          onTheme: ThemeController.toggle,
-          onAdhkar: _openNow,
         ),
         SectionTitle(
           'أوقات الصلاة',
