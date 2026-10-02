@@ -30,6 +30,11 @@ class _MushafReaderState extends State<MushafReader> {
     _keys[page - 1]?.currentState?.zoomBy(factor);
   }
 
+  void _precache(int p) {
+    if (p < 1 || p > 604 || !mounted) return;
+    precacheImage(AssetImage('assets/mushaf/p$p.webp'), context);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -37,7 +42,10 @@ class _MushafReaderState extends State<MushafReader> {
     _pc = PageController(initialPage: page - 1);
     saveLastPage(page);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_hinted && mounted) {
+      if (!mounted) return;
+      _precache(page + 1);
+      _precache(page - 1);
+      if (!_hinted) {
         _hinted = true;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -116,6 +124,8 @@ class _MushafReaderState extends State<MushafReader> {
             zoomed = false;
           });
           saveLastPage(i + 1);
+          _precache(i + 2);
+          _precache(i);
         },
         itemBuilder: (context, i) => MushafPage(
           key: _key(i),
