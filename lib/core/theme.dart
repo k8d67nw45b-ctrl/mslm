@@ -25,18 +25,25 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: b,
+      fontFamily: 'Tajawal',
       scaffoldBackgroundColor: bg,
       primaryColor: kGreen,
       colorScheme: ColorScheme.fromSeed(
         seedColor: kGreen,
         brightness: b,
       ).copyWith(primary: kGreen, surface: kCardBackground),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+        },
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: bg,
         foregroundColor: main,
         elevation: 0,
         centerTitle: true,
         titleTextStyle: TextStyle(
+          fontFamily: 'Tajawal',
           color: main,
           fontSize: 20,
           fontWeight: FontWeight.bold,
