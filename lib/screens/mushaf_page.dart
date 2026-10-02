@@ -21,11 +21,31 @@ class MushafPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<MushafPage> createState() => _MushafPageState();
+  State<MushafPage> createState() => MushafPageState();
 }
 
-class _MushafPageState extends State<MushafPage> {
+class MushafPageState extends State<MushafPage> {
   final _c = TransformationController();
+
+  void zoomBy(double factor) {
+    final size = context.size;
+    if (size == null) return;
+    final cur = _c.value.getMaxScaleOnAxis();
+    final next = (cur * factor).clamp(1.0, 5.0).toDouble();
+    if (next <= 1.2) {
+      _c.value = Matrix4.identity();
+      widget.onZoom(false);
+      return;
+    }
+    final k = next / cur;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    _c.value = Matrix4.translationValues(cx, cy, 0)
+        .multiplied(Matrix4.diagonal3Values(k, k, 1))
+        .multiplied(Matrix4.translationValues(-cx, -cy, 0))
+        .multiplied(_c.value);
+    widget.onZoom(true);
+  }
 
   @override
   void dispose() {
