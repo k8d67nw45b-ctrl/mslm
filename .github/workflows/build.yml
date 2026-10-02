@@ -73,7 +73,7 @@ jobs:
           channel: stable
 
       - name: Generate android folder
-        run: flutter create --platforms=android --project-name muslm --org com.muslm .
+        run: flutter create . --org com.muslm --project-name muslm
 
       - name: Patch gradle
         run: |
@@ -265,4 +265,3 @@ jobs:
         with:
           name: muslm-apk
           path: build/app/outputs/flutter-apk/*-release.apk
-
