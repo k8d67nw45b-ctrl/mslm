@@ -47,6 +47,7 @@ jobs:
             echo "FAILED page $p"
             exit 1
           fi
+
           cwebp -quiet -lossless -near_lossless 60 -z 9 "/tmp/p$p.png" -o "assets/mushaf/p$p.webp" || exit 1
           if [ "$p" = 1 ] || [ "$p" = 300 ]; then
             file "/tmp/p$p.png"
