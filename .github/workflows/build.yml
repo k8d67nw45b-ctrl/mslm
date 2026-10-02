@@ -265,3 +265,4 @@ jobs:
         with:
           name: muslm-apk
           path: build/app/outputs/flutter-apk/*-release.apk
+
