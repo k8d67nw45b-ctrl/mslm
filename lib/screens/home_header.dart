@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_settings.dart';
 import 'package:hijri/hijri_calendar.dart';
 import '../core/constants.dart';
 import 'prayer_helpers.dart';
@@ -145,7 +146,9 @@ class HomeHeader extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final ink = dark ? Colors.white : const Color(0xFF005C42);
     final now = DateTime.now();
-    final h = HijriCalendar.fromDate(now);
+        final h = HijriCalendar.fromDate(
+      now.add(Duration(days: AppSettings.hijriOffset.value)),
+    );
     final hour = now.hour;
     final greet = hour < 12
         ? 'صباح الخير'
