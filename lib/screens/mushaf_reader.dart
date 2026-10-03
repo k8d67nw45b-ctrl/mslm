@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import 'ayah_audio.dart';
@@ -6,6 +7,7 @@ import 'bookmarks.dart';
 import 'mushaf_page.dart';
 import 'mushaf_service.dart';
 import 'quran_text.dart';
+import 'stats_service.dart';
 
 String _latin(String s) {
   const ar = '٠١٢٣٤٥٦٧٨٩';
@@ -31,6 +33,7 @@ class _MushafReaderState extends State<MushafReader> {
   late int page;
   bool zoomed = false;
   String _surah = '';
+  Timer? _dwell;
   final Map<int, GlobalKey<MushafPageState>> _keys = {};
 
   GlobalKey<MushafPageState> _key(int i) =>
@@ -51,6 +54,12 @@ class _MushafReaderState extends State<MushafReader> {
       if (!mounted || p != page || l.isEmpty) return;
       setState(() => _surah = l.first.surahName);
     }).catchError((_) {});
+  }
+
+  void _startDwell() {
+    _dwell?.cancel();
+    final p = page;
+    _dwell = Timer(const Duration(seconds: 3), () => recordPageRead(p));
   }
 
   Future<void> _jump() async {
@@ -91,6 +100,7 @@ class _MushafReaderState extends State<MushafReader> {
       _precache(page + 1);
       _precache(page - 1);
       _updateSurah();
+      _startDwell();
       if (!_hinted) {
         _hinted = true;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +116,7 @@ class _MushafReaderState extends State<MushafReader> {
 
   @override
   void dispose() {
+    _dwell?.cancel();
     AyahAudio.stop();
     _pc.dispose();
     super.dispose();
@@ -186,6 +197,7 @@ class _MushafReaderState extends State<MushafReader> {
           _precache(i + 2);
           _precache(i);
           _updateSurah();
+          _startDwell();
         },
         itemBuilder: (context, i) => MushafPage(
           key: _key(i),
