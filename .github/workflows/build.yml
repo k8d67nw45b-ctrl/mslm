@@ -276,7 +276,8 @@ jobs:
 
       - name: APK size
         run: ls -lh build/app/outputs/flutter-apk/*.apk
-            - uses: actions/upload-artifact@v4
+            
+      - uses: actions/upload-artifact@v4
         with:
           name: muslm-apk
           path: build/app/outputs/flutter-apk/app-release.apk
