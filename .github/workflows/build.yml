@@ -225,7 +225,7 @@ jobs:
               canvas.save(folder + '/ic_stat.png')
           PY
 
-            - name: Custom app icon
+      - name: Custom app icon
         run: |
           /tmp/iv/bin/python - <<'PY'
           import glob, os
@@ -235,7 +235,7 @@ jobs:
           for pat in ('app_icon.*', 'icon.*', 'IMG_*.*', '*.png', '*.jpg', '*.jpeg', '*.PNG', '*.JPG', '*.JPEG'):
               cands += sorted(glob.glob(pat))
           cands = [c for c in cands if c.lower().endswith(('.png', '.jpg', '.jpeg'))]
-          if not cands:
+        if not cands:
               print('no custom icon found, keeping generated icon')
               raise SystemExit(0)
           fn = cands[0]
