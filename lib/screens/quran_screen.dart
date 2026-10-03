@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import 'bookmarks.dart';
+import 'khatma_screen.dart';
+import 'khatma_service.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
 import 'quran_text.dart';
@@ -18,6 +20,7 @@ class _QuranScreenState extends State<QuranScreen> {
   List<SurahItem>? surahs;
   String? error;
   int? last;
+  Khatma? kh;
   String q = '';
 
   @override
@@ -37,14 +40,21 @@ class _QuranScreenState extends State<QuranScreen> {
     try {
       final s = await loadSurahItems();
       final l = await getLastPage();
+      final k = await loadKhatma();
       if (!mounted) return;
       setState(() {
         surahs = s;
         last = l;
+        kh = k;
       });
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     }
+  }
+
+  Future<void> _refreshKh() async {
+    final k = await loadKhatma();
+    if (mounted) setState(() => kh = k);
   }
 
   Future<void> _open(int page) async {
@@ -56,6 +66,14 @@ class _QuranScreenState extends State<QuranScreen> {
     );
     final l = await getLastPage();
     if (mounted) setState(() => last = l);
+    _refreshKh();
+  }
+
+  String _khText() {
+    final k = kh;
+    if (k == null || !k.active) return 'ابدأ ختمة بورد يومي وتذكير';
+    return 'تقدّمك ${(k.done * 100 / 604).round()}% • '
+        'ورد اليوم ${k.todayDone}/${k.todayTarget}';
   }
 
   @override
@@ -107,6 +125,21 @@ class _QuranScreenState extends State<QuranScreen> {
           ),
         ),
       ),
+      if (qn.isEmpty)
+        Card(
+          color: kCardBackground,
+          margin: const EdgeInsets.only(bottom: kPaddingMedium),
+          child: ListTile(
+            leading: const Icon(Icons.auto_awesome, color: kGreen),
+            title: const Text('ختمتي'),
+            subtitle: Text(_khText()),
+            trailing: const Icon(Icons.chevron_left, color: kGreen),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const KhatmaScreen()),
+            ).then((_) => _refreshKh()),
+          ),
+        ),
       if (qn.isEmpty)
         Card(
           color: kCardBackground,
