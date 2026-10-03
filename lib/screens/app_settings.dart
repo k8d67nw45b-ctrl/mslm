@@ -1,15 +1,28 @@
 import 'package:adhan/adhan.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/constants.dart';
+import '../core/theme_controller.dart';
+
+const Map<int, String> readThemeNames = {
+  0: 'تلقائي',
+  1: 'ورقي أبيض',
+  2: 'بيج (Sepia)',
+  3: 'ليلي هادئ',
+  4: 'أسود حقيقي',
+};
 
 class AppSettings {
   static final ValueNotifier<double> fontScale = ValueNotifier<double>(1.0);
   static final ValueNotifier<int> hijriOffset = ValueNotifier<int>(0);
+  static final ValueNotifier<int> readTheme = ValueNotifier<int>(0);
 
   static Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     fontScale.value = p.getDouble('font_scale') ?? 1.0;
     hijriOffset.value = p.getInt('hijri_offset') ?? 0;
+    readTheme.value = p.getInt('read_theme') ?? 0;
+    kAmoled = p.getBool('amoled') ?? false;
   }
 
   static Future<void> setFontScale(double v) async {
@@ -22,6 +35,19 @@ class AppSettings {
     hijriOffset.value = v;
     final p = await SharedPreferences.getInstance();
     await p.setInt('hijri_offset', v);
+  }
+
+  static Future<void> setReadTheme(int v) async {
+    readTheme.value = v;
+    final p = await SharedPreferences.getInstance();
+    await p.setInt('read_theme', v);
+  }
+
+  static Future<void> setAmoled(bool v) async {
+    kAmoled = v;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool('amoled', v);
+    ThemeController.refresh();
   }
 }
 
@@ -73,8 +99,16 @@ CalculationParameters calcParamsFor(String method, String madhab) {
 
 Future<CalculationParameters> loadCalcParams() async {
   final p = await SharedPreferences.getInstance();
-  return calcParamsFor(
+  final params = calcParamsFor(
     p.getString('calc_method') ?? 'umm_al_qura',
     p.getString('madhab') ?? 'shafi',
   );
+  final fa = p.getDouble('angle_fajr');
+  final ia = p.getDouble('angle_isha');
+  if (fa != null) params.fajrAngle = fa;
+  if (ia != null) {
+    params.ishaAngle = ia;
+    params.ishaInterval = 0;
+  }
+  return params;
 }
