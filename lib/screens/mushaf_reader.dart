@@ -7,6 +7,15 @@ import 'mushaf_page.dart';
 import 'mushaf_service.dart';
 import 'quran_text.dart';
 
+String _latin(String s) {
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  var out = s;
+  for (var i = 0; i < 10; i++) {
+    out = out.replaceAll(ar[i], '$i');
+  }
+  return out;
+}
+
 class MushafReader extends StatefulWidget {
   final int startPage;
   const MushafReader({Key? key, required this.startPage})
@@ -21,6 +30,7 @@ class _MushafReaderState extends State<MushafReader> {
   late final PageController _pc;
   late int page;
   bool zoomed = false;
+  String _surah = '';
   final Map<int, GlobalKey<MushafPageState>> _keys = {};
 
   GlobalKey<MushafPageState> _key(int i) =>
@@ -35,6 +45,41 @@ class _MushafReaderState extends State<MushafReader> {
     precacheImage(AssetImage('assets/mushaf/p$p.webp'), context);
   }
 
+  void _updateSurah() {
+    final p = page;
+    ayahsOfPage(p).then((l) {
+      if (!mounted || p != page || l.isEmpty) return;
+      setState(() => _surah = l.first.surahName);
+    }).catchError((_) {});
+  }
+
+  Future<void> _jump() async {
+    final c = TextEditingController(text: '$page');
+    final r = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('الانتقال إلى صفحة'),
+        content: TextField(
+          controller: c,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '1 - 604'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(_latin(c.text))),
+            child: const Text('انتقال'),
+          ),
+        ],
+      ),
+    );
+    if (r != null && r >= 1 && r <= 604) _pc.jumpToPage(r - 1);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -45,12 +90,13 @@ class _MushafReaderState extends State<MushafReader> {
       if (!mounted) return;
       _precache(page + 1);
       _precache(page - 1);
+      _updateSurah();
       if (!_hinted) {
         _hinted = true;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'اضغط على الصفحة لاختيار آية: مشاركة، حفظ، تفسير، استماع',
+              'اضغط على الصفحة لاختيار آية، واضغط على رقم الصفحة للانتقال',
             ),
           ),
         );
@@ -93,7 +139,20 @@ class _MushafReaderState extends State<MushafReader> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: Text('صفحة $page'),
+        title: InkWell(
+          onTap: _jump,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('صفحة $page'),
+              if (_surah.isNotEmpty)
+                Text(
+                  _surah,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+            ],
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.zoom_out),
@@ -126,6 +185,7 @@ class _MushafReaderState extends State<MushafReader> {
           saveLastPage(i + 1);
           _precache(i + 2);
           _precache(i);
+          _updateSurah();
         },
         itemBuilder: (context, i) => MushafPage(
           key: _key(i),
