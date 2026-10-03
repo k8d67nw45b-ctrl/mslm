@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import '../core/theme_controller.dart';
-import 'daily_adhkar.dart';
 import 'daily_adhkar_screen.dart';
 import 'daily_content.dart';
 import 'hajj_screen.dart';
@@ -13,6 +12,7 @@ import 'home_daily_card.dart';
 import 'home_header.dart';
 import 'home_prayers.dart';
 import 'home_sections.dart';
+import 'home_stats_card.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
 import 'nawawi_screen.dart';
@@ -20,10 +20,12 @@ import 'notification_service.dart';
 import 'notifications_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
-import 'search_screen.dart';
-import 'settings_screen.dart';
 import 'qibla_screen.dart';
 import 'ruqyah_screen.dart';
+import 'search_screen.dart';
+import 'settings_screen.dart';
+import 'stats_screen.dart';
+import 'stats_service.dart';
 import 'tasbih_screen.dart';
 
 class HomeTab extends StatefulWidget {
@@ -44,7 +46,9 @@ class _HomeTabState extends State<HomeTab> {
   DailyItem? hadith;
   DailyItem? dua;
   int? lastPage;
-  double? progress;
+  Goals goals = const Goals(5, 100);
+  DayStats? today;
+  int streak = 0;
   int _day = DateTime.now().day;
   Timer? _timer;
 
@@ -87,6 +91,7 @@ class _HomeTabState extends State<HomeTab> {
       if (!mounted) return;
       setState(() {
         data = d;
+        error = null;
         _day = DateTime.now().day;
       });
       _tick();
@@ -123,11 +128,15 @@ class _HomeTabState extends State<HomeTab> {
 
   Future<void> _loadMisc() async {
     final l = await getLastPage();
-    final p = await todayAdhkarProgress();
+    final g = await loadGoals();
+    final t = await loadToday();
+    final s = await loadStreak();
     if (!mounted) return;
     setState(() {
       lastPage = l;
-      progress = p;
+      goals = g;
+      today = t;
+      streak = s;
     });
   }
 
@@ -165,12 +174,13 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   List<Shortcut> _shortcuts() {
-       return [
+    return [
       Shortcut('الإعدادات', Icons.settings, const Color(0xFFE0E6EB), () async {
         await _go(const SettingsScreen());
         _loadPrayer();
       }),
-
+      Shortcut('الإحصائيات', Icons.insights, const Color(0xFFDCEBE3),
+          () => _go(const StatsScreen())),
       Shortcut('أذكار المساء', Icons.nights_stay, const Color(0xFFDDDCEB),
           () => _go(const DailyAdhkarScreen(morning: false))),
       Shortcut('أذكار الصباح', Icons.wb_sunny, const Color(0xFFF1DDD8),
@@ -238,55 +248,63 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        ValueListenableBuilder<Duration>(
-          valueListenable: leftN,
-          builder: (context, left, _) => HomeHeader(
-            next: next,
-            left: left,
-            onSearch: () => _go(const SearchScreen()),
-            onBell: () => _go(const NotificationsScreen()),
-            onTheme: ThemeController.toggle,
-            onAdhkar: _openNow,
+    return RefreshIndicator(
+      color: kGreen,
+      onRefresh: () async {
+        await _loadPrayer();
+        await _loadMisc();
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          ValueListenableBuilder<Duration>(
+            valueListenable: leftN,
+            builder: (context, left, _) => HomeHeader(
+              next: next,
+              left: left,
+              onSearch: () => _go(const SearchScreen()),
+              onBell: () => _go(const NotificationsScreen()),
+              onTheme: ThemeController.toggle,
+              onAdhkar: _openNow,
+            ),
           ),
-        ),
-        SectionTitle(
-          'أوقات الصلاة',
-          trailing: Row(
-            children: const [
-              Icon(Icons.location_on_outlined, size: 18),
-              SizedBox(width: 4),
-              Text('حسب موقعك'),
-            ],
+          SectionTitle(
+            'أوقات الصلاة',
+            trailing: Row(
+              children: const [
+                Icon(Icons.location_on_outlined, size: 18),
+                SizedBox(width: 4),
+                Text('حسب موقعك'),
+              ],
+            ),
           ),
-        ),
-        _prayers(),
-        const SectionTitle('تطبيقاتك اليومية'),
-        ShortcutRow(items: _shortcuts()),
-        const SizedBox(height: 8),
-        ContinueCard(
-          page: lastPage,
-          onTap: () => _go(MushafReader(startPage: lastPage ?? 1)),
-        ),
-        ProgressCard(
-          progress: progress,
-          onTap: () => _go(
-            DailyAdhkarScreen(morning: DateTime.now().hour < 12),
+          _prayers(),
+          const SectionTitle('تطبيقاتك اليومية'),
+          ShortcutRow(items: _shortcuts()),
+          const SizedBox(height: 8),
+          ContinueCard(
+            page: lastPage,
+            onTap: () => _go(MushafReader(startPage: lastPage ?? 1)),
           ),
-        ),
-        if (verse != null)
-          DailyCard(label: 'آية اليوم', icon: Icons.menu_book, item: verse!),
-        if (hadith != null)
-          DailyCard(
-            label: 'حديث اليوم',
-            icon: Icons.format_quote,
-            item: hadith!,
+          StatsCard(
+            today: today,
+            goals: goals,
+            streak: streak,
+            onTap: () => _go(const StatsScreen()),
           ),
-        if (dua != null)
-          DailyCard(label: 'دعاء اليوم', icon: Icons.front_hand, item: dua!),
-      ],
+          if (verse != null)
+            DailyCard(label: 'آية اليوم', icon: Icons.menu_book, item: verse!),
+          if (hadith != null)
+            DailyCard(
+              label: 'حديث اليوم',
+              icon: Icons.format_quote,
+              item: hadith!,
+            ),
+          if (dua != null)
+            DailyCard(label: 'دعاء اليوم', icon: Icons.front_hand, item: dua!),
+        ],
+      ),
     );
   }
 }
