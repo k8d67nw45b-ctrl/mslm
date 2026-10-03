@@ -211,6 +211,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          _title('المظهر'),
+          Card(
+            color: kCardBackground,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('الأسود الحقيقي (AMOLED)'),
+                  subtitle: const Text(
+                    'يوفر البطارية بشاشات OLED (يعيدك للرئيسية)',
+                  ),
+                  value: kAmoled,
+                  activeColor: kGreen,
+                  onChanged: (v) => AppSettings.setAmoled(v),
+                ),
+                ListTile(
+                  title: const Text('ألوان المصحف'),
+                  subtitle: ValueListenableBuilder<int>(
+                    valueListenable: AppSettings.readTheme,
+                    builder: (context, v, _) => Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final e in readThemeNames.entries)
+                          ChoiceChip(
+                            label: Text(e.value),
+                            selected: v == e.key,
+                            onSelected: (_) =>
+                                AppSettings.setReadTheme(e.key),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           _title('عن التطبيق'),
           Card(
             color: kCardBackground,
