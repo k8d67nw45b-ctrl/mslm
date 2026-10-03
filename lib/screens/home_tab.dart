@@ -20,6 +20,7 @@ import 'notification_service.dart';
 import 'notifications_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
+import 'khatma_screen.dart';
 import 'qibla_screen.dart';
 import 'ruqyah_screen.dart';
 import 'search_screen.dart';
@@ -175,6 +176,7 @@ class _HomeTabState extends State<HomeTab> {
 
   List<Shortcut> _shortcuts() {
     return [
+      Shortcut('الختمة', Icons.auto_awesome, const Color(0xFFEBE6DC), () => _go(const KhatmaScreen())),
       Shortcut('الإعدادات', Icons.settings, const Color(0xFFE0E6EB), () async {
         await _go(const SettingsScreen());
         _loadPrayer();
