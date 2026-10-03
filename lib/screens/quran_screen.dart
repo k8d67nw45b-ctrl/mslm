@@ -4,6 +4,7 @@ import 'bookmarks.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
 import 'quran_text.dart';
+import 'search_screen.dart' show normAr;
 
 class QuranScreen extends StatefulWidget {
   const QuranScreen({Key? key}) : super(key: key);
@@ -13,14 +14,22 @@ class QuranScreen extends StatefulWidget {
 }
 
 class _QuranScreenState extends State<QuranScreen> {
+  final _sc = TextEditingController();
   List<SurahItem>? surahs;
   String? error;
   int? last;
+  String q = '';
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _sc.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -69,22 +78,50 @@ class _QuranScreenState extends State<QuranScreen> {
     if (surahs == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final list = surahs!;
+    final qn = normAr(q);
+    final list = qn.isEmpty
+        ? surahs!
+        : surahs!
+            .where((s) =>
+                normAr(s.name).contains(qn) || '${s.number}' == qn)
+            .toList();
     final head = <Widget>[
-      Card(
-        color: kCardBackground,
-        margin: const EdgeInsets.only(bottom: kPaddingMedium),
-        child: ListTile(
-          leading: const Icon(Icons.bookmarks, color: kGreen),
-          title: const Text('نقاط الحفظ'),
-          trailing: const Icon(Icons.chevron_left, color: kGreen),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const BookmarksScreen()),
+      Padding(
+        padding: const EdgeInsets.only(bottom: kPaddingMedium),
+        child: TextField(
+          controller: _sc,
+          onChanged: (v) => setState(() => q = v),
+          decoration: InputDecoration(
+            hintText: 'ابحث عن سورة بالاسم أو الرقم',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: q.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _sc.clear();
+                      setState(() => q = '');
+                    },
+                  ),
+            border: const OutlineInputBorder(),
           ),
         ),
       ),
-      if (last != null)
+      if (qn.isEmpty)
+        Card(
+          color: kCardBackground,
+          margin: const EdgeInsets.only(bottom: kPaddingMedium),
+          child: ListTile(
+            leading: const Icon(Icons.bookmarks, color: kGreen),
+            title: const Text('نقاط الحفظ'),
+            trailing: const Icon(Icons.chevron_left, color: kGreen),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BookmarksScreen()),
+            ),
+          ),
+        ),
+      if (qn.isEmpty && last != null)
         Card(
           color: kGreen,
           margin: const EdgeInsets.only(bottom: kPaddingMedium),
@@ -97,6 +134,7 @@ class _QuranScreenState extends State<QuranScreen> {
     ];
     return ListView.builder(
       padding: const EdgeInsets.all(kPaddingMedium),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       itemCount: head.length + list.length,
       itemBuilder: (context, i) {
         if (i < head.length) return head[i];
