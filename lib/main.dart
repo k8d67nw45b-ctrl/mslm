@@ -8,8 +8,8 @@ import 'screens/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await ThemeController.load();
   await AppSettings.load();
+  await ThemeController.load();
   runApp(const MyApp());
 }
 
@@ -18,39 +18,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeController.mode,
-      builder: (context, mode, _) {
-        final dark = mode == ThemeMode.dark;
-        return MaterialApp(
-          key: ValueKey(mode),
-          title: appName,
-          theme: dark ? AppTheme.darkTheme : AppTheme.lightTheme,
-          locale: const Locale('ar'),
-          supportedLocales: const [Locale('ar')],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          builder: (context, child) {
-            return ValueListenableBuilder<double>(
-              valueListenable: AppSettings.fontScale,
-              builder: (context, scale, _) {
-                final system = MediaQuery.textScalerOf(context).scale(1.0);
-                return MediaQuery(
-                  data: MediaQuery.of(context).copyWith(
-                    textScaler: TextScaler.linear(system * scale),
-                  ),
-                  child: child!,
-                );
-              },
-            );
-          },
-          home: const HomeScreen(),
-          debugShowCheckedModeBanner: false,
-        );
-      },
+    return ValueListenableBuilder<int>(
+      valueListenable: ThemeController.rev,
+      builder: (context, rev, _) => ValueListenableBuilder<ThemeMode>(
+        valueListenable: ThemeController.mode,
+        builder: (context, mode, _) {
+          final dark = mode == ThemeMode.dark;
+          return MaterialApp(
+            key: ValueKey('${mode.name}_$rev'),
+            title: appName,
+            theme: dark ? AppTheme.darkTheme : AppTheme.lightTheme,
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            builder: (context, child) {
+              return ValueListenableBuilder<double>(
+                valueListenable: AppSettings.fontScale,
+                builder: (context, scale, _) {
+                  final system = MediaQuery.textScalerOf(context).scale(1.0);
+                  return MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler: TextScaler.linear(system * scale),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+            },
+            home: const HomeScreen(),
+            debugShowCheckedModeBanner: false,
+          );
+        },
+      ),
     );
   }
 }
