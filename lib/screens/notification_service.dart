@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'location_service.dart';
+import 'app_settings.dart';
 
 const _names = ['الفجر', 'الظهر', 'العصر', 'المغرب', 'العشاء'];
 
@@ -105,13 +106,13 @@ Future<void> rescheduleAll({bool force = false}) async {
   final now = DateTime.now();
   final sig = '${loc.lat.toStringAsFixed(2)},${loc.lon.toStringAsFixed(2)}'
       '|$prayersOn$morningOn$eveningOn|$before|${each.join()}'
-      '|${now.year}-${now.month}-${now.day}';
+            '|${now.year}-${now.month}-${now.day}'
+      '|${p.getString('calc_method')}|${p.getString('madhab')}';
   if (!force && p.getString('n_sig') == sig) return;
 
   await _plugin.cancelAll();
   final coords = Coordinates(loc.lat, loc.lon);
-  final params = CalculationMethod.umm_al_qura.getParameters();
-  params.madhab = Madhab.shafi;
+    final params = await loadCalcParams();
 
   for (var d = 0; d < 7; d++) {
     final day = now.add(Duration(days: d));
