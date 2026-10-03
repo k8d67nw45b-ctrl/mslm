@@ -224,7 +224,6 @@ jobs:
               os.makedirs(folder, exist_ok=True)
               canvas.save(folder + '/ic_stat.png')
           PY
-
       - name: Custom app icon
         run: |
           /tmp/iv/bin/python - <<'PY'
@@ -235,7 +234,7 @@ jobs:
           for pat in ('app_icon.*', 'icon.*', 'IMG_*.*', '*.png', '*.jpg', '*.jpeg', '*.PNG', '*.JPG', '*.JPEG'):
               cands += sorted(glob.glob(pat))
           cands = [c for c in cands if c.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        if not cands:
+          if not cands:
               print('no custom icon found, keeping generated icon')
               raise SystemExit(0)
           fn = cands[0]
@@ -243,7 +242,7 @@ jobs:
           src = Image.open(fn)
           S = 1024
           has_alpha = False
-        if src.mode in ('RGBA', 'LA') or 'transparency' in src.info:
+          if src.mode in ('RGBA', 'LA') or 'transparency' in src.info:
               a = src.convert('RGBA').getchannel('A')
               has_alpha = a.getextrema()[0] < 250
         if has_alpha:
@@ -275,7 +274,6 @@ jobs:
           out.resize((512, 512), Image.Resampling.LANCZOS).save('/tmp/icon.png')
           print('custom icon applied')
           PY
-
       - name: Download fonts
         run: |
           mkdir -p assets/fonts
