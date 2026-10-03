@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 
 class MushafPage extends StatefulWidget {
   final int page;
-  final bool dark;
+  final int theme;
   final ValueChanged<bool> onZoom;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   const MushafPage({
     Key? key,
     required this.page,
-    required this.dark,
+    required this.theme,
     required this.onZoom,
     required this.onTap,
+    required this.onLongPress,
   }) : super(key: key);
 
   @override
@@ -48,6 +50,22 @@ class MushafPageState extends State<MushafPage> {
 
   @override
   Widget build(BuildContext context) {
+    Color? tint;
+    BlendMode? blend;
+    switch (widget.theme) {
+      case 2:
+        tint = const Color(0xFFF1E4C8);
+        blend = BlendMode.multiply;
+        break;
+      case 3:
+        tint = const Color(0xFFE6E6E6);
+        blend = BlendMode.difference;
+        break;
+      case 4:
+        tint = Colors.white;
+        blend = BlendMode.difference;
+        break;
+    }
     return InteractiveViewer(
       transformationController: _c,
       minScale: 1,
@@ -58,6 +76,7 @@ class MushafPageState extends State<MushafPage> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         child: SizedBox(
           width: double.infinity,
           height: double.infinity,
@@ -65,8 +84,8 @@ class MushafPageState extends State<MushafPage> {
             'assets/mushaf/p${widget.page}.webp',
             fit: BoxFit.contain,
             filterQuality: FilterQuality.medium,
-            color: widget.dark ? Colors.white : null,
-            colorBlendMode: widget.dark ? BlendMode.difference : null,
+            color: tint,
+            colorBlendMode: blend,
             errorBuilder: (c, e, s) => const Center(
               child: Text('الصفحة غير موجودة داخل التطبيق'),
             ),
