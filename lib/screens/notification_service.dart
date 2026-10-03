@@ -10,6 +10,19 @@ const _names = ['الفجر', 'الظهر', 'العصر', 'المغرب', 'ال�
 final FlutterLocalNotificationsPlugin _plugin =
     FlutterLocalNotificationsPlugin();
 bool _ready = false;
+String lastNotifError = '';
+
+class NotifStatus {
+  final bool? enabled;
+  final bool? exact;
+  final int pending;
+  final String error;
+  const NotifStatus(this.enabled, this.exact, this.pending, this.error);
+}
+
+AndroidFlutterLocalNotificationsPlugin? get _android =>
+    _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
 
 Future<void> initNotifications() async {
   if (_ready) return;
@@ -21,13 +34,34 @@ Future<void> initNotifications() async {
 
 Future<bool> requestNotificationPermissions() async {
   await initNotifications();
-  final a = _plugin.resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>();
-  final ok = await a?.requestNotificationsPermission() ?? true;
+  return await _android?.requestNotificationsPermission() ?? true;
+}
+
+Future<void> requestExactAlarms() async {
+  await initNotifications();
   try {
-    await a?.requestExactAlarmsPermission();
+    await _android?.requestExactAlarmsPermission();
+  } catch (e) {
+    lastNotifError = '$e';
+  }
+}
+
+Future<NotifStatus> notifStatus() async {
+  await initNotifications();
+  final a = _android;
+  bool? enabled;
+  bool? exact;
+  var pending = 0;
+  try {
+    enabled = await a?.areNotificationsEnabled();
   } catch (_) {}
-  return ok;
+  try {
+    exact = await a?.canScheduleExactNotifications();
+  } catch (_) {}
+  try {
+    pending = (await _plugin.pendingNotificationRequests()).length;
+  } catch (_) {}
+  return NotifStatus(enabled, exact, pending, lastNotifError);
 }
 
 // kind: 0 صلاة، 1 أذكار، 2 ورد القرآن
@@ -45,7 +79,7 @@ NotificationDetails _details(int kind) {
   );
 }
 
-Future<void> _schedule(
+Future<bool> _schedule(
   int id,
   String title,
   String body,
@@ -64,7 +98,9 @@ Future<void> _schedule(
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
-  } catch (_) {
+    return true;
+  } catch (e) {
+    lastNotifError = '$e';
     try {
       await _plugin.zonedSchedule(
         id,
@@ -76,21 +112,62 @@ Future<void> _schedule(
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-    } catch (_) {}
+      return true;
+    } catch (e2) {
+      lastNotifError = '$e2';
+      return false;
+    }
   }
 }
 
-Future<void> sendTestNotification() async {
-  await initNotifications();
-  await _plugin.show(
-    9999,
-    'رفيق المسلم',
-    'تم تفعيل التنبيهات بنجاح',
-    _details(0),
-  );
+Future<String?> sendTestNotification() async {
+  try {
+    await initNotifications();
+    await _plugin.show(
+      9999,
+      'رفيق المسلم',
+      'تم تفعيل التنبيهات بنجاح',
+      _details(0),
+    );
+    return null;
+  } catch (e) {
+    lastNotifError = '$e';
+    return '$e';
+  }
 }
 
-Future<void> rescheduleAll({bool force = false}) async {
+Future<String?> scheduleTestIn(int seconds) async {
+  try {
+    await initNotifications();
+    final at = DateTime.now().add(Duration(seconds: seconds));
+    final ok = await _schedule(
+      9998,
+      'رفيق المسلم',
+      'نجحت الجدولة، التنبيهات المؤجلة تعمل',
+      at,
+      0,
+    );
+    return ok ? null : lastNotifError;
+  } catch (e) {
+    lastNotifError = '$e';
+    return '$e';
+  }
+}
+
+Future<bool> enableDefaultNotifications() async {
+  final p = await SharedPreferences.getInstance();
+  await p.setBool('n_prayers', true);
+  await p.setBool('n_morning', true);
+  await p.setBool('n_evening', true);
+  final ok = await requestNotificationPermissions();
+  await requestExactAlarms();
+  try {
+    await rescheduleAll(force: true);
+  } catch (_) {}
+  return ok;
+}
+
+Future<int> rescheduleAll({bool force = false}) async {
   await initNotifications();
   final p = await SharedPreferences.getInstance();
   final prayersOn = p.getBool('n_prayers') ?? false;
@@ -102,7 +179,7 @@ Future<void> rescheduleAll({bool force = false}) async {
   if (!anyPrayer && !khOn) {
     await _plugin.cancelAll();
     await p.setString('n_sig', '');
-    return;
+    return 0;
   }
 
   LatLon? loc;
@@ -124,9 +201,10 @@ Future<void> rescheduleAll({bool force = false}) async {
       '|${p.getString('calc_method')}|${p.getString('madhab')}'
       '|${p.getDouble('angle_fajr')}|${p.getDouble('angle_isha')}'
       '|$khOn|$khTime';
-  if (!force && p.getString('n_sig') == sig) return;
+  if (!force && p.getString('n_sig') == sig) return 0;
 
   await _plugin.cancelAll();
+  var count = 0;
 
   if (anyPrayer && loc != null) {
     final coords = Coordinates(loc.lat, loc.lon);
@@ -146,31 +224,33 @@ Future<void> rescheduleAll({bool force = false}) async {
           final body = before == 0
               ? 'حسب موقعك: ${loc.name}'
               : 'بقي $before دقائق على الأذان';
-          await _schedule(d * 10 + k, title, body, at, 0);
+          if (await _schedule(d * 10 + k, title, body, at, 0)) count++;
         }
       }
       if (morningOn) {
         final at = t.fajr.add(const Duration(minutes: 30));
-        if (at.isAfter(now)) {
-          await _schedule(
-            d * 10 + 5,
-            'أذكار الصباح',
-            'حان وقت أذكار الصباح',
-            at,
-            1,
-          );
+        if (at.isAfter(now) &&
+            await _schedule(
+              d * 10 + 5,
+              'أذكار الصباح',
+              'حان وقت أذكار الصباح',
+              at,
+              1,
+            )) {
+          count++;
         }
       }
       if (eveningOn) {
         final at = t.asr.add(const Duration(minutes: 30));
-        if (at.isAfter(now)) {
-          await _schedule(
-            d * 10 + 6,
-            'أذكار المساء',
-            'حان وقت أذكار المساء',
-            at,
-            1,
-          );
+        if (at.isAfter(now) &&
+            await _schedule(
+              d * 10 + 6,
+              'أذكار المساء',
+              'حان وقت أذكار المساء',
+              at,
+              1,
+            )) {
+          count++;
         }
       }
     }
@@ -186,14 +266,17 @@ Future<void> rescheduleAll({bool force = false}) async {
         khTime % 60,
       );
       if (at.isBefore(now)) continue;
-      await _schedule(
+      if (await _schedule(
         100 + d,
         'ورد القرآن اليومي',
         'حان وقت وردك من القرآن لتكمل ختمتك',
         at,
         2,
-      );
+      )) {
+        count++;
+      }
     }
   }
   await p.setString('n_sig', sig);
+  return count;
 }
