@@ -20,6 +20,8 @@ import 'notification_service.dart';
 import 'notifications_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
+import 'search_screen.dart';
+import 'settings_screen.dart';
 import 'qibla_screen.dart';
 import 'ruqyah_screen.dart';
 import 'tasbih_screen.dart';
@@ -163,7 +165,12 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   List<Shortcut> _shortcuts() {
-    return [
+       return [
+      Shortcut('الإعدادات', Icons.settings, const Color(0xFFE0E6EB), () async {
+        await _go(const SettingsScreen());
+        _loadPrayer();
+      }),
+
       Shortcut('أذكار المساء', Icons.nights_stay, const Color(0xFFDDDCEB),
           () => _go(const DailyAdhkarScreen(morning: false))),
       Shortcut('أذكار الصباح', Icons.wb_sunny, const Color(0xFFF1DDD8),
@@ -239,7 +246,7 @@ class _HomeTabState extends State<HomeTab> {
           builder: (context, left, _) => HomeHeader(
             next: next,
             left: left,
-            onSearch: () => _go(const HisnScreen()),
+            onSearch: () => _go(const SearchScreen()),
             onBell: () => _go(const NotificationsScreen()),
             onTheme: ThemeController.toggle,
             onAdhkar: _openNow,
