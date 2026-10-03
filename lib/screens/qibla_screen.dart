@@ -1,9 +1,15 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../core/constants.dart';
 import 'compass_painter.dart';
 import 'location_service.dart';
+
+const _kaabaLat = 21.4225;
+const _kaabaLon = 39.8262;
+
+double _rad(double d) => d * math.pi / 180;
 
 class QiblaScreen extends StatefulWidget {
   const QiblaScreen({Key? key}) : super(key: key);
@@ -14,8 +20,11 @@ class QiblaScreen extends StatefulWidget {
 
 class _QiblaScreenState extends State<QiblaScreen> {
   double? qiblaBearing;
+  double distance = 0;
   String? error;
   String place = '';
+  double? _sm;
+  bool _aligned = false;
 
   @override
   void initState() {
@@ -30,12 +39,14 @@ class _QiblaScreenState extends State<QiblaScreen> {
     });
     try {
       final loc = await getLocation();
+      if (!mounted) return;
       setState(() {
         place = loc.name;
         qiblaBearing = _bearingToKaaba(loc.lat, loc.lon);
+        distance = _distanceKm(loc.lat, loc.lon);
       });
     } catch (e) {
-      setState(() => error = e.toString());
+      if (mounted) setState(() => error = e.toString());
     }
   }
 
@@ -45,14 +56,33 @@ class _QiblaScreenState extends State<QiblaScreen> {
   }
 
   double _bearingToKaaba(double lat, double lon) {
-    const kaabaLat = 21.4225;
-    const kaabaLon = 39.8262;
-    double rad(double d) => d * math.pi / 180;
-    final dLon = rad(kaabaLon - lon);
-    final y = math.sin(dLon) * math.cos(rad(kaabaLat));
-    final x = math.cos(rad(lat)) * math.sin(rad(kaabaLat)) -
-        math.sin(rad(lat)) * math.cos(rad(kaabaLat)) * math.cos(dLon);
+    final dLon = _rad(_kaabaLon - lon);
+    final y = math.sin(dLon) * math.cos(_rad(_kaabaLat));
+    final x = math.cos(_rad(lat)) * math.sin(_rad(_kaabaLat)) -
+        math.sin(_rad(lat)) * math.cos(_rad(_kaabaLat)) * math.cos(dLon);
     return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+  }
+
+  double _distanceKm(double lat, double lon) {
+    const r = 6371.0;
+    final dLat = _rad(_kaabaLat - lat);
+    final dLon = _rad(_kaabaLon - lon);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_rad(lat)) *
+            math.cos(_rad(_kaabaLat)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  }
+
+  double _filter(double h) {
+    if (_sm == null) {
+      _sm = h;
+      return h;
+    }
+    final d = ((h - _sm! + 540) % 360) - 180;
+    _sm = (_sm! + d * 0.2 + 360) % 360;
+    return _sm!;
   }
 
   @override
@@ -89,12 +119,17 @@ class _QiblaScreenState extends State<QiblaScreen> {
     return StreamBuilder<CompassEvent>(
       stream: FlutterCompass.events,
       builder: (context, snap) {
-        final heading = snap.data?.heading;
-        if (heading == null) {
+        final raw = snap.data?.heading;
+        if (raw == null) {
           return const Center(
             child: Text('البوصلة غير متوفرة بهذا الجهاز'),
           );
         }
+        final heading = _filter((raw + 360) % 360);
+        final diff = ((qiblaBearing! - heading + 540) % 360) - 180;
+        final aligned = diff.abs() < 4;
+        if (aligned && !_aligned) HapticFeedback.mediumImpact();
+        _aligned = aligned;
         final dialAngle = -heading * math.pi / 180;
         final arrowAngle = (qiblaBearing! - heading) * math.pi / 180;
 
@@ -112,12 +147,16 @@ class _QiblaScreenState extends State<QiblaScreen> {
                 label: Text('الموقع: $place (تغيير)'),
               ),
               const SizedBox(height: kPaddingMedium),
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
                 width: 260,
                 height: 260,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: kGreen, width: 3),
+                  border: Border.all(
+                    color: aligned ? kGreen : Colors.grey,
+                    width: aligned ? 6 : 3,
+                  ),
                   color: kCardBackground,
                 ),
                 child: Stack(
@@ -143,15 +182,26 @@ class _QiblaScreenState extends State<QiblaScreen> {
               ),
               const SizedBox(height: kPaddingLarge),
               Text(
-                '${qiblaBearing!.toStringAsFixed(1)}°',
-                style: const TextStyle(
-                  color: kGreen,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                aligned
+                    ? 'أنت باتجاه القبلة ✓'
+                    : 'استدر حتى يتوجه السهم للأعلى',
+                style: TextStyle(
+                  color: aligned ? kGreen : null,
+                  fontWeight: aligned ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 18,
                 ),
               ),
               const SizedBox(height: kPaddingSmall),
-              const Text('السهم الأخضر يشير إلى القبلة'),
+              Text(
+                'زاوية القبلة: ${qiblaBearing!.toStringAsFixed(1)}°',
+                style: const TextStyle(color: kGreen, fontSize: 16),
+              ),
+              Text('المسافة إلى الكعبة: ${distance.round()} كم'),
+              const SizedBox(height: kPaddingSmall),
+              const Text(
+                'ابعد الجوال عن المعادن والمغناطيس، وحرّكه بشكل 8 للمعايرة',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
             ],
           ),
         );
