@@ -225,7 +225,7 @@ jobs:
               canvas.save(folder + '/ic_stat.png')
           PY
 
-      - name: Custom app icon
+            - name: Custom app icon
         run: |
           /tmp/iv/bin/python - <<'PY'
           import glob, os
@@ -235,25 +235,25 @@ jobs:
           for pat in ('app_icon.*', 'icon.*', 'IMG_*.*', '*.png', '*.jpg', '*.jpeg', '*.PNG', '*.JPG', '*.JPEG'):
               cands += sorted(glob.glob(pat))
           cands = [c for c in cands if c.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        if not cands:
-             print('no custom icon found, keeping generated icon')
-            raise SystemExit(0)
-         fn = cands[0]
-         print('using', fn)
-         src = Image.open(fn)
-         S = 1024
-         has_alpha = False
-    if src.mode in ('RGBA', 'LA') or 'transparency' in src.info:
-            a = src.convert('RGBA').getchannel('A')
-           has_alpha = a.getextrema()[0] < 250
-    if has_alpha:
+          if not cands:
+              print('no custom icon found, keeping generated icon')
+              raise SystemExit(0)
+          fn = cands[0]
+          print('using', fn)
+          src = Image.open(fn)
+          S = 1024
+          has_alpha = False
+          if src.mode in ('RGBA', 'LA') or 'transparency' in src.info:
+              a = src.convert('RGBA').getchannel('A')
+              has_alpha = a.getextrema()[0] < 250
+          if has_alpha:
               base = src.convert('RGBA')
               w, h = base.size
               side = min(w, h)
               x0 = (w - side) // 2
               y0 = (h - side) // 2
               out = base.crop((x0, y0, x0 + side, y0 + side)).resize((S, S), Image.Resampling.LANCZOS)
-    else:
+          else:
               rgb = src.convert('RGB')
               w, h = rgb.size
               l = round(w * 0.0073)
@@ -267,7 +267,7 @@ jobs:
               m = m.resize((S, S), Image.Resampling.LANCZOS)
               out = Image.new('RGBA', (S, S), (0, 0, 0, 0))
               out.paste(big, (0, 0), m)
-    sizes = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
+          sizes = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
           for name, px in sizes.items():
               folder = 'android/app/src/main/res/mipmap-' + name
               os.makedirs(folder, exist_ok=True)
