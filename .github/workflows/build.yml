@@ -245,14 +245,14 @@ jobs:
           if src.mode in ('RGBA', 'LA') or 'transparency' in src.info:
               a = src.convert('RGBA').getchannel('A')
               has_alpha = a.getextrema()[0] < 250
-        if has_alpha:
+          if has_alpha:
               base = src.convert('RGBA')
               w, h = base.size
               side = min(w, h)
               x0 = (w - side) // 2
               y0 = (h - side) // 2
               out = base.crop((x0, y0, x0 + side, y0 + side)).resize((S, S), Image.Resampling.LANCZOS)
-        else:
+          else:
               rgb = src.convert('RGB')
               w, h = rgb.size
               l = round(w * 0.0073)
@@ -274,6 +274,7 @@ jobs:
           out.resize((512, 512), Image.Resampling.LANCZOS).save('/tmp/icon.png')
           print('custom icon applied')
           PY
+
       - name: Download fonts
         run: |
           mkdir -p assets/fonts
