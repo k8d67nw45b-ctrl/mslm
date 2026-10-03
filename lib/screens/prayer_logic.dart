@@ -1,4 +1,5 @@
 import 'package:adhan/adhan.dart';
+import 'app_settings.dart';
 import 'location_service.dart';
 
 class PrayerData {
@@ -11,8 +12,7 @@ class PrayerData {
 Future<PrayerData> loadPrayerData() async {
   final loc = await getLocation();
   final coords = Coordinates(loc.lat, loc.lon);
-  final params = CalculationMethod.umm_al_qura.getParameters();
-  params.madhab = Madhab.shafi;
+  final params = await loadCalcParams();
   final times = PrayerTimes.today(coords, params);
   return PrayerData(times, _nextName(times), loc.name);
 }
