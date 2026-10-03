@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
 import '../core/theme_controller.dart';
 import 'daily_adhkar_screen.dart';
@@ -9,10 +10,10 @@ import 'hisn_detail.dart';
 import 'hisn_screen.dart';
 import 'hisn_service.dart';
 import 'home_daily_card.dart';
-import 'home_header.dart';
 import 'home_prayers.dart';
 import 'home_sections.dart';
 import 'home_stats_card.dart';
+import 'khatma_screen.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
 import 'nawawi_screen.dart';
@@ -20,11 +21,11 @@ import 'notification_service.dart';
 import 'notifications_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
-import 'khatma_screen.dart';
 import 'qibla_screen.dart';
 import 'ruqyah_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
+import 'sky_hero.dart';
 import 'stats_screen.dart';
 import 'stats_service.dart';
 import 'tasbih_screen.dart';
@@ -60,6 +61,7 @@ class _HomeTabState extends State<HomeTab> {
     _loadDaily();
     _loadMisc();
     _scheduleNotifs();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askNotifs());
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
@@ -78,6 +80,47 @@ class _HomeTabState extends State<HomeTab> {
     _timer?.cancel();
     leftN.dispose();
     super.dispose();
+  }
+
+  Future<void> _askNotifs() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getBool('n_asked') ?? false) return;
+    await p.setBool('n_asked', true);
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تفعيل التنبيهات؟'),
+        content: const Text(
+          'تنبيه عند دخول وقت كل صلاة، وتذكير بأذكار الصباح والمساء. '
+          'تقدر تعدّلها بأي وقت من أيقونة الجرس.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('لاحقاً'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('تفعيل'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final granted = await enableDefaultNotifications();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            granted
+                ? 'تم تفعيل التنبيهات'
+                : 'اسمح بالإشعارات من إعدادات الجوال',
+          ),
+        ),
+      );
+    } catch (_) {}
   }
 
   Future<void> _scheduleNotifs() async {
@@ -176,7 +219,8 @@ class _HomeTabState extends State<HomeTab> {
 
   List<Shortcut> _shortcuts() {
     return [
-      Shortcut('الختمة', Icons.auto_awesome, const Color(0xFFEBE6DC), () => _go(const KhatmaScreen())),
+      Shortcut('الختمة', Icons.auto_awesome, const Color(0xFFEBE6DC),
+          () => _go(const KhatmaScreen())),
       Shortcut('الإعدادات', Icons.settings, const Color(0xFFE0E6EB), () async {
         await _go(const SettingsScreen());
         _loadPrayer();
@@ -260,16 +304,15 @@ class _HomeTabState extends State<HomeTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          ValueListenableBuilder<Duration>(
-            valueListenable: leftN,
-            builder: (context, left, _) => HomeHeader(
-              next: next,
-              left: left,
-              onSearch: () => _go(const SearchScreen()),
-              onBell: () => _go(const NotificationsScreen()),
-              onTheme: ThemeController.toggle,
-              onAdhkar: _openNow,
-            ),
+          SkyHero(
+            data: data,
+            next: next,
+            left: leftN,
+            active: widget.active,
+            onSearch: () => _go(const SearchScreen()),
+            onBell: () => _go(const NotificationsScreen()),
+            onTheme: ThemeController.toggle,
+            onAdhkar: _openNow,
           ),
           SectionTitle(
             'أوقات الصلاة',
