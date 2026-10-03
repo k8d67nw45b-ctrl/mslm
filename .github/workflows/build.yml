@@ -114,6 +114,30 @@ jobs:
           PY
           cat android/app/build.gradle* | head -80
 
+      - name: Disable shrinking for notifications
+        run: |
+          python3 - <<'PY'
+          import os
+          for fn in ('android/app/build.gradle.kts', 'android/app/build.gradle'):
+              if not os.path.exists(fn):
+                  continue
+              s = open(fn, encoding='utf-8').read()
+              kts = fn.endswith('.kts')
+              i = s.find('buildTypes')
+              j = s.find('release {', i) if i >= 0 else -1
+              if j >= 0 and 'inifyEnabled' not in s:
+                  if kts:
+                      ins = 'release {\n            isMinifyEnabled = false\n            isShrinkResources = false'
+                  else:
+                      ins = 'release {\n            minifyEnabled false\n            shrinkResources false'
+                  s = s[:j] + ins + s[j + len('release {'):]
+                  open(fn, 'w', encoding='utf-8').write(s)
+                  print('patched', fn)
+          PY
+          mkdir -p android/app/src/main/res/raw
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ic_stat,@mipmap/ic_launcher" />' > android/app/src/main/res/raw/keep.xml
+          cat android/app/src/main/res/raw/keep.xml
+
       - name: Generate app icon
         run: |
           sudo apt-get update
