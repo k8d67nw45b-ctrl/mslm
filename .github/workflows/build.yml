@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      abi:
+        description: 'android-arm64 or android-arm'
+        default: 'android-arm64'
+      target_mb:
+        description: 'Quran pages target size in MB'
+        default: '46'
 
 jobs:
   build:
@@ -18,23 +25,28 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v3
+          key: quran-assets-v4-${{ github.event.inputs.target_mb || '46' }}
 
       - name: Download Quran assets
         if: steps.qcache.outputs.cache-hit != 'true'
+        env:
+          TARGET_MB: ${{ github.event.inputs.target_mb || '46' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y webp
-          mkdir -p assets/mushaf assets/data
+          sudo apt-get install -y webp imagemagick
+          mkdir -p assets/mushaf assets/data /tmp/orig
           curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/quran_uthmani.json https://api.alquran.cloud/v1/quran/quran-uthmani
           python3 -c "import json; d=json.load(open('assets/data/quran_uthmani.json')); assert len(d['data']['surahs'])==114"
-          cat > /tmp/conv.sh <<'SH'
+          cat > /tmp/dl.sh <<'SH'
           #!/bin/sh
           p="$1"
+          if [ -s "/tmp/orig/p$p.png" ]; then
+            exit 0
+          fi
           ok=0
           for i in 1 2 3 4 5 6; do
             for base in "https://cdn.jsdelivr.net/gh/SakinaDevGroup/mushaf-madani-cdn@main" "https://raw.githubusercontent.com/SakinaDevGroup/mushaf-madani-cdn/main"; do
-              if curl -fsSL --max-time 90 -o "/tmp/p$p.png" "$base/light/p$p.png"; then
+              if curl -fsSL --max-time 90 -o "/tmp/orig/p$p.png" "$base/light/p$p.png"; then
                 ok=1
                 break
               fi
@@ -46,20 +58,33 @@ jobs:
           done
           if [ "$ok" != 1 ]; then
             echo "FAILED page $p"
+            rm -f "/tmp/orig/p$p.png"
             exit 1
           fi
-          cwebp -quiet -lossless -near_lossless 60 -z 9 "/tmp/p$p.png" -o "assets/mushaf/p$p.webp" || exit 1
-          if [ "$p" = 1 ] || [ "$p" = 300 ]; then
-            file "/tmp/p$p.png"
-            ls -l "/tmp/p$p.png" "assets/mushaf/p$p.webp"
-          fi
-          rm -f "/tmp/p$p.png"
           SH
-          chmod +x /tmp/conv.sh
-          seq 1 604 | xargs -P 4 -n 1 /tmp/conv.sh || true
-          for p in $(seq 1 604); do
-            if [ ! -f assets/mushaf/p$p.webp ]; then
-              /tmp/conv.sh $p
+          chmod +x /tmp/dl.sh
+          seq 1 604 | xargs -P 4 -n 1 /tmp/dl.sh || true
+          for p in $(seq 1 604); do /tmp/dl.sh $p; done
+          test "$(ls /tmp/orig | wc -l)" -eq 604
+          du -sh /tmp/orig
+          file /tmp/orig/p1.png /tmp/orig/p300.png
+          cat > /tmp/cv.sh <<'SH'
+          #!/bin/sh
+          p="$1"
+          convert "/tmp/orig/p$p.png" -strip -resize "${PCT}%" -colors "$COLORS" +dither "/tmp/q$p.png" || exit 1
+          cwebp -quiet -lossless -z 6 "/tmp/q$p.png" -o "assets/mushaf/p$p.webp" || exit 1
+          rm -f "/tmp/q$p.png"
+          SH
+          chmod +x /tmp/cv.sh
+          for CFG in 48:100 32:100 24:100 20:100 24:92 20:90; do
+            export COLORS=${CFG%%:*}
+            export PCT=${CFG##*:}
+            rm -f assets/mushaf/*.webp
+            seq 1 604 | xargs -P 4 -n 1 /tmp/cv.sh
+            SIZE=$(du -sm assets/mushaf | cut -f1)
+            echo "RESULT colors=$COLORS scale=${PCT}% size=${SIZE}MB target=${TARGET_MB}MB"
+            if [ "$SIZE" -le "$TARGET_MB" ]; then
+              break
             fi
           done
           test "$(ls assets/mushaf | wc -l)" -eq 604
@@ -136,7 +161,6 @@ jobs:
           PY
           mkdir -p android/app/src/main/res/raw
           printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ic_stat,@mipmap/ic_launcher" />' > android/app/src/main/res/raw/keep.xml
-          cat android/app/src/main/res/raw/keep.xml
 
       - name: Generate app icon
         run: |
@@ -248,6 +272,7 @@ jobs:
               os.makedirs(folder, exist_ok=True)
               canvas.save(folder + '/ic_stat.png')
           PY
+
       - name: Custom app icon
         run: |
           /tmp/iv/bin/python - <<'PY'
@@ -346,11 +371,18 @@ jobs:
       - run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --target-platform android-arm,android-arm64 --obfuscate --split-debug-info=build/debug-info
+        run: flutter build apk --release --target-platform ${{ github.event.inputs.abi || 'android-arm64' }} --obfuscate --split-debug-info=build/debug-info
 
       - name: APK size
-        run: ls -lh build/app/outputs/flutter-apk/*.apk
-            
+        run: |
+          F=build/app/outputs/flutter-apk/app-release.apk
+          ls -l $F
+          MB=$(( $(stat -c%s $F) / 1048576 ))
+          echo "APK size: ${MB} MB"
+          if [ "$MB" -gt 65 ]; then
+            echo "WARNING: APK is larger than 65 MB"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: muslm-apk
