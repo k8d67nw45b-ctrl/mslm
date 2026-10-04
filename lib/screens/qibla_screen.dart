@@ -3,13 +3,150 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../core/constants.dart';
-import 'compass_painter.dart';
 import 'location_service.dart';
 
 const _kaabaLat = 21.4225;
 const _kaabaLon = 39.8262;
 
 double _rad(double d) => d * math.pi / 180;
+
+class _QiblaPainter extends CustomPainter {
+  final double heading;
+  final double bearing;
+  final bool aligned;
+  final bool dark;
+  _QiblaPainter(this.heading, this.bearing, this.aligned, this.dark);
+
+  void _text(Canvas c, String t, Color col, double size) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: t,
+        style: TextStyle(
+          color: col,
+          fontSize: size,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(c, Offset(-tp.width / 2, -tp.height / 2));
+  }
+
+  void _kaaba(Canvas canvas, Offset p, double s) {
+    final body = Rect.fromCenter(center: p, width: s, height: s);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(body, Radius.circular(s * 0.1)),
+      Paint()..color = const Color(0xFF15110F),
+    );
+    final gold = Paint()..color = const Color(0xFFD4AF37);
+    canvas.drawRect(
+      Rect.fromLTWH(body.left, body.top + s * 0.22, s, s * 0.13),
+      gold,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(p.dx - s * 0.1, p.dy + s * 0.05, s * 0.2, s * 0.3),
+      gold,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(body, Radius.circular(s * 0.1)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = const Color(0xFFD4AF37),
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = math.min(size.width, size.height) / 2 - 6;
+    final ring = aligned ? kGreen : Colors.grey;
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()..color = dark ? const Color(0xFF11161C) : Colors.white,
+    );
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = aligned ? 7 : 4
+        ..color = ring,
+    );
+
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(-_rad(heading));
+    final tick = Paint()
+      ..strokeWidth = 2
+      ..color = dark ? Colors.white54 : Colors.black45;
+    for (var i = 0; i < 72; i++) {
+      canvas.save();
+      canvas.rotate(_rad(i * 5.0));
+      final len = i % 18 == 0 ? 22.0 : (i % 6 == 0 ? 16.0 : 10.0);
+      canvas.drawLine(Offset(0, -r + 6), Offset(0, -r + 6 + len), tick);
+      canvas.restore();
+    }
+    const labels = ['N', 'E', 'S', 'W'];
+    for (var i = 0; i < 4; i++) {
+      final a = _rad(i * 90.0);
+      canvas.save();
+      canvas.rotate(a);
+      canvas.translate(0, -r + 42);
+      canvas.rotate(_rad(heading) - a);
+      _text(
+        canvas,
+        labels[i],
+        i == 0 ? Colors.redAccent : (dark ? Colors.white70 : Colors.black54),
+        16,
+      );
+      canvas.restore();
+    }
+    canvas.restore();
+
+    final th = _rad(bearing - heading);
+    final dir = Offset(math.sin(th), -math.cos(th));
+    final kp = c + dir * (r - 38);
+    canvas.drawLine(
+      c,
+      c + dir * (r - 62),
+      Paint()
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round
+        ..color = aligned ? kGreen : const Color(0xFFD4AF37),
+    );
+    canvas.drawCircle(c, 6, Paint()..color = aligned ? kGreen : Colors.grey);
+    if (aligned) {
+      canvas.drawCircle(
+        kp,
+        34,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [kGreen.withOpacity(0.6), Colors.transparent],
+          ).createShader(Rect.fromCircle(center: kp, radius: 34)),
+      );
+    }
+    _kaaba(canvas, kp, 30);
+
+    final tri = Path()
+      ..moveTo(c.dx - 9, c.dy - r - 1)
+      ..lineTo(c.dx + 9, c.dy - r - 1)
+      ..lineTo(c.dx, c.dy - r + 16)
+      ..close();
+    canvas.drawPath(
+      tri,
+      Paint()..color = aligned ? kGreen : const Color(0xFFD4AF37),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_QiblaPainter old) =>
+      old.heading != heading ||
+      old.bearing != bearing ||
+      old.aligned != aligned ||
+      old.dark != dark;
+}
 
 class QiblaScreen extends StatefulWidget {
   const QiblaScreen({Key? key}) : super(key: key);
@@ -85,6 +222,12 @@ class _QiblaScreenState extends State<QiblaScreen> {
     return _sm!;
   }
 
+  Future<void> _buzz() async {
+    HapticFeedback.heavyImpact();
+    await Future.delayed(const Duration(milliseconds: 140));
+    HapticFeedback.heavyImpact();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (error != null) {
@@ -112,10 +255,11 @@ class _QiblaScreenState extends State<QiblaScreen> {
     if (qiblaBearing == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    return _buildCompass();
+    return _compass();
   }
 
-  Widget _buildCompass() {
+  Widget _compass() {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder<CompassEvent>(
       stream: FlutterCompass.events,
       builder: (context, snap) {
@@ -128,82 +272,78 @@ class _QiblaScreenState extends State<QiblaScreen> {
         final heading = _filter((raw + 360) % 360);
         final diff = ((qiblaBearing! - heading + 540) % 360) - 180;
         final aligned = diff.abs() < 4;
-        if (aligned && !_aligned) HapticFeedback.mediumImpact();
+        if (aligned && !_aligned) _buzz();
         _aligned = aligned;
-        final dialAngle = -heading * math.pi / 180;
-        final arrowAngle = (qiblaBearing! - heading) * math.pi / 180;
-
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'اتجاه القبلة',
-                style: Theme.of(context).textTheme.titleLarge,
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                color: aligned
+                    ? kGreen.withOpacity(0.25)
+                    : Colors.transparent,
               ),
-              TextButton.icon(
-                onPressed: _pick,
-                icon: const Icon(Icons.location_on, color: kGreen),
-                label: Text('الموقع: $place (تغيير)'),
-              ),
-              const SizedBox(height: kPaddingMedium),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: aligned ? kGreen : Colors.grey,
-                    width: aligned ? 6 : 3,
-                  ),
-                  color: kCardBackground,
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
+            ),
+            Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Transform.rotate(
-                      angle: dialAngle,
+                    Text(
+                      'اتجاه القبلة',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    TextButton.icon(
+                      onPressed: _pick,
+                      icon: const Icon(Icons.location_on, color: kGreen),
+                      label: Text('الموقع: $place (تغيير)'),
+                    ),
+                    const SizedBox(height: kPaddingSmall),
+                    SizedBox(
+                      width: 300,
+                      height: 300,
                       child: CustomPaint(
-                        size: const Size(260, 260),
-                        painter: CompassPainter(),
+                        painter: _QiblaPainter(
+                          heading,
+                          qiblaBearing!,
+                          aligned,
+                          dark,
+                        ),
                       ),
                     ),
-                    Transform.rotate(
-                      angle: arrowAngle,
-                      child: const Icon(
-                        Icons.navigation,
-                        color: kGreen,
-                        size: 90,
+                    const SizedBox(height: kPaddingMedium),
+                    Text(
+                      aligned
+                          ? 'أنت باتجاه القبلة ✓'
+                          : 'استدر حتى تصير الكعبة عند المؤشر',
+                      style: TextStyle(
+                        color: aligned ? kGreen : null,
+                        fontWeight:
+                            aligned ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: kPaddingSmall),
+                    Text(
+                      'زاوية القبلة: ${qiblaBearing!.toStringAsFixed(1)}°',
+                      style: const TextStyle(color: kGreen, fontSize: 16),
+                    ),
+                    Text('المسافة إلى الكعبة: ${distance.round()} كم'),
+                    const SizedBox(height: kPaddingSmall),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'ابعد الجوال عن المعادن والمغناطيس، وحرّكه بشكل 8 '
+                        'للمعايرة',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: kPaddingLarge),
-              Text(
-                aligned
-                    ? 'أنت باتجاه القبلة ✓'
-                    : 'استدر حتى يتوجه السهم للأعلى',
-                style: TextStyle(
-                  color: aligned ? kGreen : null,
-                  fontWeight: aligned ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 18,
-                ),
-              ),
-              const SizedBox(height: kPaddingSmall),
-              Text(
-                'زاوية القبلة: ${qiblaBearing!.toStringAsFixed(1)}°',
-                style: const TextStyle(color: kGreen, fontSize: 16),
-              ),
-              Text('المسافة إلى الكعبة: ${distance.round()} كم'),
-              const SizedBox(height: kPaddingSmall),
-              const Text(
-                'ابعد الجوال عن المعادن والمغناطيس، وحرّكه بشكل 8 للمعايرة',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
