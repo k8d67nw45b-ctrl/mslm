@@ -12,15 +12,18 @@ on:
         description: 'Quran pages target size in MB'
         default: '46'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Quran assets
+      - name: Restore Quran assets
         id: qcache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             assets/mushaf
@@ -89,6 +92,15 @@ jobs:
           done
           test "$(ls assets/mushaf | wc -l)" -eq 604
           du -sh assets/mushaf
+
+      - name: Save Quran assets
+        if: steps.qcache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            assets/mushaf
+            assets/data
+          key: quran-assets-v4-${{ github.event.inputs.target_mb || '46' }}
 
       - name: Download adhkar data
         run: |
@@ -336,10 +348,13 @@ jobs:
           ls -l assets/fonts
           test "$(ls assets/fonts | wc -l)" -eq 5
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload icon preview
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: icon-preview
           path: /tmp/icon.png
+          retention-days: 1
 
       - name: Configure Android manifest
         run: |
@@ -383,7 +398,20 @@ jobs:
             echo "WARNING: APK is larger than 65 MB"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - name: Publish APK to Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk /tmp/rafiq-almuslim.apk
+          gh release create "build-${{ github.run_number }}" /tmp/rafiq-almuslim.apk --title "Build ${{ github.run_number }}" --notes "APK build ${{ github.run_number }}" --target "${{ github.sha }}"
+          for t in $(gh release list --limit 50 --json tagName --jq '.[3:][].tagName'); do
+            gh release delete "$t" --cleanup-tag -y || true
+          done
+
+      - name: Upload APK artifact (backup)
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: muslm-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 1
