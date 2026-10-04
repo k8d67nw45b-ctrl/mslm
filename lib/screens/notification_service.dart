@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'app_settings.dart';
 import 'location_service.dart';
+import 'occasions.dart';
 
 const _names = ['الفجر', 'الظهر', 'العصر', 'المغرب', 'العشاء'];
 
@@ -64,10 +65,15 @@ Future<NotifStatus> notifStatus() async {
   return NotifStatus(enabled, exact, pending, lastNotifError);
 }
 
-// kind: 0 صلاة، 1 أذكار، 2 ورد القرآن
+// kind: 0 صلاة، 1 أذكار، 2 ورد القرآن، 3 مناسبات وصيام
 NotificationDetails _details(int kind) {
-  final ids = ['prayer_times', 'adhkar_reminders', 'wird_reminders'];
-  final titles = ['مواقيت الصلاة', 'تذكير الأذكار', 'ورد القرآن'];
+  final ids = [
+    'prayer_times',
+    'adhkar_reminders',
+    'wird_reminders',
+    'occasions_reminders',
+  ];
+  final titles = ['مواقيت الصلاة', 'تذكير الأذكار', 'ورد القرآن', 'المناسبات'];
   return NotificationDetails(
     android: AndroidNotificationDetails(
       ids[kind],
@@ -167,6 +173,39 @@ Future<bool> enableDefaultNotifications() async {
   return ok;
 }
 
+Future<int> _scheduleOccasions(SharedPreferences p, DateTime now) async {
+  var count = 0;
+  final weekly = p.getBool('occ_weekly') ?? false;
+  final enabled = [
+    for (var i = 0; i < kOccasions.length; i++) p.getBool('occ_on_$i') ?? false,
+  ];
+  for (var d = 1; d <= 8; d++) {
+    final day = DateTime(now.year, now.month, now.day + d);
+    final at = DateTime(day.year, day.month, day.day - 1, 20, 0);
+    if (at.isBefore(now)) continue;
+    for (final o in occasionsOn(day)) {
+      final i = kOccasions.indexOf(o);
+      if (i < 0 || !enabled[i]) continue;
+      if (await _schedule(200 + d * 20 + i, 'غداً: ${o.name}', o.note, at, 3)) {
+        count++;
+      }
+    }
+    if (weekly && isMonThu(day)) {
+      final nm = day.weekday == DateTime.monday ? 'الاثنين' : 'الخميس';
+      if (await _schedule(
+        200 + d * 20 + 19,
+        'غداً يوم $nm',
+        'يستحب صيامه',
+        at,
+        3,
+      )) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
 Future<int> rescheduleAll({bool force = false}) async {
   await initNotifications();
   final p = await SharedPreferences.getInstance();
@@ -175,8 +214,13 @@ Future<int> rescheduleAll({bool force = false}) async {
   final eveningOn = p.getBool('n_evening') ?? false;
   final khOn =
       (p.getBool('kh_active') ?? false) && (p.getBool('kh_remind') ?? false);
+  final occOn = (p.getBool('occ_weekly') ?? false) ||
+      [
+        for (var i = 0; i < kOccasions.length; i++)
+          p.getBool('occ_on_$i') ?? false,
+      ].any((b) => b);
   final anyPrayer = prayersOn || morningOn || eveningOn;
-  if (!anyPrayer && !khOn) {
+  if (!anyPrayer && !khOn && !occOn) {
     await _plugin.cancelAll();
     await p.setString('n_sig', '');
     return 0;
@@ -187,7 +231,7 @@ Future<int> rescheduleAll({bool force = false}) async {
     try {
       loc = await getLocation();
     } catch (_) {
-      if (!khOn) rethrow;
+      if (!khOn && !occOn) rethrow;
     }
   }
 
@@ -195,12 +239,17 @@ Future<int> rescheduleAll({bool force = false}) async {
   final each = [for (var i = 0; i < 5; i++) p.getBool('n_p$i') ?? true];
   final khTime = p.getInt('kh_time') ?? 21 * 60;
   final now = DateTime.now();
+  final occSig = [
+    for (var i = 0; i < kOccasions.length; i++)
+      (p.getBool('occ_on_$i') ?? false) ? '1' : '0',
+  ].join();
   final sig = '${loc?.lat.toStringAsFixed(2)},${loc?.lon.toStringAsFixed(2)}'
       '|$prayersOn$morningOn$eveningOn|$before|${each.join()}'
       '|${now.year}-${now.month}-${now.day}'
       '|${p.getString('calc_method')}|${p.getString('madhab')}'
       '|${p.getDouble('angle_fajr')}|${p.getDouble('angle_isha')}'
-      '|$khOn|$khTime';
+      '|$khOn|$khTime|$occSig|${p.getBool('occ_weekly')}'
+      '|${AppSettings.hijriOffset.value}';
   if (!force && p.getString('n_sig') == sig) return 0;
 
   await _plugin.cancelAll();
@@ -277,6 +326,11 @@ Future<int> rescheduleAll({bool force = false}) async {
       }
     }
   }
+
+  if (occOn) {
+    count += await _scheduleOccasions(p, now);
+  }
+
   await p.setString('n_sig', sig);
   return count;
 }
