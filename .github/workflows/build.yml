@@ -21,6 +21,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download adhan audio
+        run: |
+          mkdir -p adhan_audio
+          B=https://archive.org/download/MasjidAn-nabawiRecordings
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -A "Mozilla/5.0" -o /tmp/raw_adhan_madinah.ogg "$B/AdhanMasjidNabawi.ogg"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -A "Mozilla/5.0" -o /tmp/raw_adhan_fajr.ogg "$B/14AugFajrAdhanMadinah.ogg"
+          ls -l /tmp/raw_adhan_*.ogg
+          file /tmp/raw_adhan_*.ogg
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          for n in adhan_madinah adhan_fajr; do
+            ffmpeg -y -loglevel error -i /tmp/raw_$n.ogg -vn -ac 1 -ar 32000 -c:a libvorbis -q:a 2 adhan_audio/$n.ogg || cp /tmp/raw_$n.ogg adhan_audio/$n.ogg
+            echo "duration of $n (seconds):"
+            ffprobe -v error -show_entries format=duration -of csv=p=0 adhan_audio/$n.ogg || true
+          done
+          ls -l adhan_audio
+
       - name: Restore Quran assets
         id: qcache
         uses: actions/cache/restore@v4
@@ -172,7 +189,14 @@ jobs:
                   print('patched', fn)
           PY
           mkdir -p android/app/src/main/res/raw
-          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ic_stat,@mipmap/ic_launcher" />' > android/app/src/main/res/raw/keep.xml
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ic_stat,@mipmap/ic_launcher,@raw/adhan_madinah,@raw/adhan_fajr" />' > android/app/src/main/res/raw/keep.xml
+
+      - name: Add adhan sounds
+        run: |
+          mkdir -p android/app/src/main/res/raw
+          cp adhan_audio/adhan_madinah.ogg android/app/src/main/res/raw/adhan_madinah.ogg
+          cp adhan_audio/adhan_fajr.ogg android/app/src/main/res/raw/adhan_fajr.ogg
+          ls -l android/app/src/main/res/raw
 
       - name: Generate app icon
         run: |
