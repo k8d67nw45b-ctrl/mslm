@@ -1,336 +1,367 @@
-import 'package:adhan/adhan.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'app_settings.dart';
-import 'location_service.dart';
-import 'occasions.dart';
+import '../core/constants.dart';
+import '../core/theme_controller.dart';
+import 'daily_adhkar_screen.dart';
+import 'daily_content.dart';
+import 'growth_screen.dart';
+import 'hajj_screen.dart';
+import 'hijri_calendar_screen.dart';
+import 'hisn_detail.dart';
+import 'hisn_screen.dart';
+import 'hisn_service.dart';
+import 'home_daily_card.dart';
+import 'home_extras.dart';
+import 'home_prayers.dart';
+import 'home_sections.dart';
+import 'home_stats_card.dart';
+import 'khatma_screen.dart';
+import 'mushaf_reader.dart';
+import 'mushaf_service.dart';
+import 'nawawi_screen.dart';
+import 'notification_service.dart';
+import 'notifications_screen.dart';
+import 'prayer_helpers.dart';
+import 'prayer_logic.dart';
+import 'qibla_screen.dart';
+import 'ruqyah_screen.dart';
+import 'search_screen.dart';
+import 'settings_screen.dart';
+import 'sky_hero.dart';
+import 'stats_screen.dart';
+import 'stats_service.dart';
+import 'tasbih_screen.dart';
 
-const _names = ['الفجر', 'الظهر', 'العصر', 'المغرب', 'العشاء'];
+class HomeTab extends StatefulWidget {
+  final bool active;
+  const HomeTab({Key? key, this.active = true}) : super(key: key);
 
-final FlutterLocalNotificationsPlugin _plugin =
-    FlutterLocalNotificationsPlugin();
-bool _ready = false;
-String lastNotifError = '';
-
-class NotifStatus {
-  final bool? enabled;
-  final bool? exact;
-  final int pending;
-  final String error;
-  const NotifStatus(this.enabled, this.exact, this.pending, this.error);
+  @override
+  State<HomeTab> createState() => _HomeTabState();
 }
 
-AndroidFlutterLocalNotificationsPlugin? get _android =>
-    _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+class _HomeTabState extends State<HomeTab> {
+  PrayerData? data;
+  String? error;
+  NextInfo? next;
+  final ValueNotifier<Duration> leftN =
+      ValueNotifier<Duration>(Duration.zero);
+  DailyItem? verse;
+  DailyItem? hadith;
+  DailyItem? dua;
+  int? lastPage;
+  Goals goals = const Goals(5, 100);
+  DayStats? today;
+  int streak = 0;
+  int _day = DateTime.now().day;
+  Timer? _timer;
 
-Future<void> initNotifications() async {
-  if (_ready) return;
-  tz.setLocalLocation(tz.UTC);
-  const android = AndroidInitializationSettings('ic_stat');
-  await _plugin.initialize(const InitializationSettings(android: android));
-  _ready = true;
-}
-
-Future<bool> requestNotificationPermissions() async {
-  await initNotifications();
-  return await _android?.requestNotificationsPermission() ?? true;
-}
-
-Future<void> requestExactAlarms() async {
-  await initNotifications();
-  try {
-    await _android?.requestExactAlarmsPermission();
-  } catch (e) {
-    lastNotifError = '$e';
+  @override
+  void initState() {
+    super.initState();
+    _loadPrayer();
+    _loadDaily();
+    _loadMisc();
+    _scheduleNotifs();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askNotifs());
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
-}
 
-Future<NotifStatus> notifStatus() async {
-  await initNotifications();
-  final a = _android;
-  bool? enabled;
-  bool? exact;
-  var pending = 0;
-  try {
-    enabled = await a?.areNotificationsEnabled();
-  } catch (_) {}
-  try {
-    exact = await a?.canScheduleExactNotifications();
-  } catch (_) {}
-  try {
-    pending = (await _plugin.pendingNotificationRequests()).length;
-  } catch (_) {}
-  return NotifStatus(enabled, exact, pending, lastNotifError);
-}
+  @override
+  void didUpdateWidget(covariant HomeTab old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      _tick();
+      _loadMisc();
+      _scheduleNotifs();
+    }
+  }
 
-// kind: 0 صلاة، 1 أذكار، 2 ورد القرآن، 3 مناسبات وصيام
-NotificationDetails _details(int kind) {
-  final ids = [
-    'prayer_times',
-    'adhkar_reminders',
-    'wird_reminders',
-    'occasions_reminders',
-  ];
-  final titles = ['مواقيت الصلاة', 'تذكير الأذكار', 'ورد القرآن', 'المناسبات'];
-  return NotificationDetails(
-    android: AndroidNotificationDetails(
-      ids[kind],
-      titles[kind],
-      importance: Importance.max,
-      priority: Priority.high,
-      icon: 'ic_stat',
-    ),
-  );
-}
+  @override
+  void dispose() {
+    _timer?.cancel();
+    leftN.dispose();
+    super.dispose();
+  }
 
-Future<bool> _schedule(
-  int id,
-  String title,
-  String body,
-  DateTime at,
-  int kind,
-) async {
-  final when = tz.TZDateTime.from(at, tz.UTC);
-  try {
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      when,
-      _details(kind),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+  Future<void> _askNotifs() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.getBool('n_asked') ?? false) return;
+    await p.setBool('n_asked', true);
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تفعيل التنبيهات؟'),
+        content: const Text(
+          'تنبيه عند دخول وقت كل صلاة بصوت أذان المدينة، وتذكير بأذكار '
+          'الصباح والمساء. تقدر تعدّلها بأي وقت من أيقونة الجرس.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('لاحقاً'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('تفعيل'),
+          ),
+        ],
+      ),
     );
-    return true;
-  } catch (e) {
-    lastNotifError = '$e';
+    if (ok != true) return;
     try {
-      await _plugin.zonedSchedule(
-        id,
-        title,
-        body,
-        when,
-        _details(kind),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
+      final granted = await enableDefaultNotifications();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            granted
+                ? 'تم تفعيل التنبيهات'
+                : 'اسمح بالإشعارات من إعدادات الجوال',
+          ),
+        ),
       );
-      return true;
-    } catch (e2) {
-      lastNotifError = '$e2';
-      return false;
-    }
-  }
-}
-
-Future<String?> sendTestNotification() async {
-  try {
-    await initNotifications();
-    await _plugin.show(
-      9999,
-      'رفيق المسلم',
-      'تم تفعيل التنبيهات بنجاح',
-      _details(0),
-    );
-    return null;
-  } catch (e) {
-    lastNotifError = '$e';
-    return '$e';
-  }
-}
-
-Future<String?> scheduleTestIn(int seconds) async {
-  try {
-    await initNotifications();
-    final at = DateTime.now().add(Duration(seconds: seconds));
-    final ok = await _schedule(
-      9998,
-      'رفيق المسلم',
-      'نجحت الجدولة، التنبيهات المؤجلة تعمل',
-      at,
-      0,
-    );
-    return ok ? null : lastNotifError;
-  } catch (e) {
-    lastNotifError = '$e';
-    return '$e';
-  }
-}
-
-Future<bool> enableDefaultNotifications() async {
-  final p = await SharedPreferences.getInstance();
-  await p.setBool('n_prayers', true);
-  await p.setBool('n_morning', true);
-  await p.setBool('n_evening', true);
-  final ok = await requestNotificationPermissions();
-  await requestExactAlarms();
-  try {
-    await rescheduleAll(force: true);
-  } catch (_) {}
-  return ok;
-}
-
-Future<int> _scheduleOccasions(SharedPreferences p, DateTime now) async {
-  var count = 0;
-  final weekly = p.getBool('occ_weekly') ?? false;
-  final enabled = [
-    for (var i = 0; i < kOccasions.length; i++) p.getBool('occ_on_$i') ?? false,
-  ];
-  for (var d = 1; d <= 8; d++) {
-    final day = DateTime(now.year, now.month, now.day + d);
-    final at = DateTime(day.year, day.month, day.day - 1, 20, 0);
-    if (at.isBefore(now)) continue;
-    for (final o in occasionsOn(day)) {
-      final i = kOccasions.indexOf(o);
-      if (i < 0 || !enabled[i]) continue;
-      if (await _schedule(200 + d * 20 + i, 'غداً: ${o.name}', o.note, at, 3)) {
-        count++;
-      }
-    }
-    if (weekly && isMonThu(day)) {
-      final nm = day.weekday == DateTime.monday ? 'الاثنين' : 'الخميس';
-      if (await _schedule(
-        200 + d * 20 + 19,
-        'غداً يوم $nm',
-        'يستحب صيامه',
-        at,
-        3,
-      )) {
-        count++;
-      }
-    }
-  }
-  return count;
-}
-
-Future<int> rescheduleAll({bool force = false}) async {
-  await initNotifications();
-  final p = await SharedPreferences.getInstance();
-  final prayersOn = p.getBool('n_prayers') ?? false;
-  final morningOn = p.getBool('n_morning') ?? false;
-  final eveningOn = p.getBool('n_evening') ?? false;
-  final khOn =
-      (p.getBool('kh_active') ?? false) && (p.getBool('kh_remind') ?? false);
-  final occOn = (p.getBool('occ_weekly') ?? false) ||
-      [
-        for (var i = 0; i < kOccasions.length; i++)
-          p.getBool('occ_on_$i') ?? false,
-      ].any((b) => b);
-  final anyPrayer = prayersOn || morningOn || eveningOn;
-  if (!anyPrayer && !khOn && !occOn) {
-    await _plugin.cancelAll();
-    await p.setString('n_sig', '');
-    return 0;
+    } catch (_) {}
   }
 
-  LatLon? loc;
-  if (anyPrayer) {
+  Future<void> _scheduleNotifs() async {
     try {
-      loc = await getLocation();
+      await rescheduleAll();
+    } catch (_) {}
+  }
+
+  Future<void> _loadPrayer() async {
+    try {
+      final d = await loadPrayerData();
+      if (!mounted) return;
+      setState(() {
+        data = d;
+        error = null;
+        _day = DateTime.now().day;
+      });
+      _tick();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => error = e.toString());
+    }
+  }
+
+  void _tick() {
+    final d = data;
+    if (d == null || !mounted || !widget.active) return;
+    final now = DateTime.now();
+    if (now.day != _day) {
+      _day = now.day;
+      _loadPrayer();
+      return;
+    }
+    final n = nextOf(d.times);
+    if (next == null || next!.name != n.name) {
+      setState(() => next = n);
+    }
+    leftN.value = n.time.difference(now);
+  }
+
+  Future<void> _loadDaily() async {
+    final v = await verseOfDay();
+    if (mounted) setState(() => verse = v);
+    final h = await hadithOfDay();
+    if (mounted) setState(() => hadith = h);
+    final d = await duaOfDay();
+    if (mounted) setState(() => dua = d);
+  }
+
+  Future<void> _loadMisc() async {
+    final l = await getLastPage();
+    final g = await loadGoals();
+    final t = await loadToday();
+    final s = await loadStreak();
+    if (!mounted) return;
+    setState(() {
+      lastPage = l;
+      goals = g;
+      today = t;
+      streak = s;
+    });
+  }
+
+  Future<void> _go(Widget page) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
+    _loadMisc();
+  }
+
+  Future<void> _openSleep() async {
+    try {
+      final all = await loadHisn();
+      final s = all.firstWhere((e) => e.title.contains('أذكار النوم'));
+      if (!mounted) return;
+      await _go(HisnDetail(sec: s));
     } catch (_) {
-      if (!khOn && !occOn) rethrow;
-    }
-  }
-
-  final before = p.getInt('n_before') ?? 0;
-  final each = [for (var i = 0; i < 5; i++) p.getBool('n_p$i') ?? true];
-  final khTime = p.getInt('kh_time') ?? 21 * 60;
-  final now = DateTime.now();
-  final occSig = [
-    for (var i = 0; i < kOccasions.length; i++)
-      (p.getBool('occ_on_$i') ?? false) ? '1' : '0',
-  ].join();
-  final sig = '${loc?.lat.toStringAsFixed(2)},${loc?.lon.toStringAsFixed(2)}'
-      '|$prayersOn$morningOn$eveningOn|$before|${each.join()}'
-      '|${now.year}-${now.month}-${now.day}'
-      '|${p.getString('calc_method')}|${p.getString('madhab')}'
-      '|${p.getDouble('angle_fajr')}|${p.getDouble('angle_isha')}'
-      '|$khOn|$khTime|$occSig|${p.getBool('occ_weekly')}'
-      '|${AppSettings.hijriOffset.value}';
-  if (!force && p.getString('n_sig') == sig) return 0;
-
-  await _plugin.cancelAll();
-  var count = 0;
-
-  if (anyPrayer && loc != null) {
-    final coords = Coordinates(loc.lat, loc.lon);
-    final params = await loadCalcParams();
-    for (var d = 0; d < 7; d++) {
-      final day = now.add(Duration(days: d));
-      final t = PrayerTimes(coords, DateComponents.from(day), params);
-      final times = [t.fajr, t.dhuhr, t.asr, t.maghrib, t.isha];
-      if (prayersOn) {
-        for (var k = 0; k < 5; k++) {
-          if (!each[k]) continue;
-          final at = times[k].subtract(Duration(minutes: before));
-          if (at.isBefore(now)) continue;
-          final title = before == 0
-              ? 'حان وقت صلاة ${_names[k]}'
-              : 'اقترب وقت صلاة ${_names[k]}';
-          final body = before == 0
-              ? 'حسب موقعك: ${loc.name}'
-              : 'بقي $before دقائق على الأذان';
-          if (await _schedule(d * 10 + k, title, body, at, 0)) count++;
-        }
-      }
-      if (morningOn) {
-        final at = t.fajr.add(const Duration(minutes: 30));
-        if (at.isAfter(now) &&
-            await _schedule(
-              d * 10 + 5,
-              'أذكار الصباح',
-              'حان وقت أذكار الصباح',
-              at,
-              1,
-            )) {
-          count++;
-        }
-      }
-      if (eveningOn) {
-        final at = t.asr.add(const Duration(minutes: 30));
-        if (at.isAfter(now) &&
-            await _schedule(
-              d * 10 + 6,
-              'أذكار المساء',
-              'حان وقت أذكار المساء',
-              at,
-              1,
-            )) {
-          count++;
-        }
-      }
-    }
-  }
-
-  if (khOn) {
-    for (var d = 0; d < 7; d++) {
-      final at = DateTime(
-        now.year,
-        now.month,
-        now.day + d,
-        khTime ~/ 60,
-        khTime % 60,
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذّر فتح أذكار النوم')),
       );
-      if (at.isBefore(now)) continue;
-      if (await _schedule(
-        100 + d,
-        'ورد القرآن اليومي',
-        'حان وقت وردك من القرآن لتكمل ختمتك',
-        at,
-        2,
-      )) {
-        count++;
-      }
     }
   }
 
-  if (occOn) {
-    count += await _scheduleOccasions(p, now);
+  void _openNow() {
+    final h = DateTime.now().hour;
+    if (h < 12) {
+      _go(const DailyAdhkarScreen(morning: true));
+    } else if (h < 22) {
+      _go(const DailyAdhkarScreen(morning: false));
+    } else {
+      _openSleep();
+    }
   }
 
-  await p.setString('n_sig', sig);
-  return count;
+  List<Shortcut> _shortcuts() {
+    return [
+      Shortcut('التقويم الهجري', Icons.calendar_month, const Color(0xFFE0EBDC),
+          () => _go(const HijriCalendarScreen())),
+      Shortcut('شجرة التزامك', Icons.park, const Color(0xFFDCEBE3),
+          () => _go(const GrowthScreen())),
+      Shortcut('الختمة', Icons.auto_awesome, const Color(0xFFEBE6DC),
+          () => _go(const KhatmaScreen())),
+      Shortcut('الإعدادات', Icons.settings, const Color(0xFFE0E6EB), () async {
+        await _go(const SettingsScreen());
+        _loadPrayer();
+      }),
+      Shortcut('الإحصائيات', Icons.insights, const Color(0xFFDCEBE3),
+          () => _go(const StatsScreen())),
+      Shortcut('أذكار المساء', Icons.nights_stay, const Color(0xFFDDDCEB),
+          () => _go(const DailyAdhkarScreen(morning: false))),
+      Shortcut('أذكار الصباح', Icons.wb_sunny, const Color(0xFFF1DDD8),
+          () => _go(const DailyAdhkarScreen(morning: true))),
+      Shortcut('المسبحة', Icons.touch_app, const Color(0xFFE8E8DC),
+          () => _go(const TasbihScreen())),
+      Shortcut(
+        'اتجاه القبلة',
+        Icons.explore,
+        const Color(0xFFEBDDEB),
+        () => _go(
+          Scaffold(
+            appBar: AppBar(title: const Text('اتجاه القبلة')),
+            body: const QiblaScreen(),
+          ),
+        ),
+      ),
+      Shortcut('الرقية الشرعية', Icons.healing, const Color(0xFFE6DCEB),
+          () => _go(const RuqyahScreen())),
+      Shortcut('حصن المسلم', Icons.favorite, const Color(0xFFDCEBE3),
+          () => _go(const HisnScreen())),
+      Shortcut('الأربعون النووية', Icons.menu_book, const Color(0xFFE3EBDC),
+          () => _go(const NawawiScreen())),
+      Shortcut('الحج والعمرة', Icons.mosque, const Color(0xFFDCE6EB),
+          () => _go(const HajjScreen())),
+      Shortcut('المصحف', Icons.auto_stories, const Color(0xFFEBE6DC),
+          () => _go(MushafReader(startPage: lastPage ?? 1))),
+    ];
+  }
+
+  Widget _prayers() {
+    final d = data;
+    final n = next;
+    if (d != null && n != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: ValueListenableBuilder<Duration>(
+          valueListenable: leftN,
+          builder: (context, left, _) =>
+              PrayerGrid(times: d.times, next: n, left: left),
+        ),
+      );
+    }
+    if (error != null) {
+      return Card(
+        color: kCardBackground,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        child: ListTile(
+          title: Text(error!),
+          trailing: TextButton(
+            onPressed: () {
+              setState(() => error = null);
+              _loadPrayer();
+            },
+            child: const Text('إعادة'),
+          ),
+        ),
+      );
+    }
+    return const Padding(
+      padding: EdgeInsets.all(24),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: kGreen,
+      onRefresh: () async {
+        await _loadPrayer();
+        await _loadMisc();
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          SkyHero(
+            data: data,
+            next: next,
+            left: leftN,
+            active: widget.active,
+            onSearch: () => _go(const SearchScreen()),
+            onBell: () => _go(const NotificationsScreen()),
+            onTheme: ThemeController.toggle,
+            onAdhkar: _openNow,
+          ),
+          OccasionCard(active: widget.active),
+          SectionTitle(
+            'أوقات الصلاة',
+            trailing: Row(
+              children: const [
+                Icon(Icons.location_on_outlined, size: 18),
+                SizedBox(width: 4),
+                Text('حسب موقعك'),
+              ],
+            ),
+          ),
+          _prayers(),
+          const SectionTitle('تطبيقاتك اليومية'),
+          ShortcutRow(items: _shortcuts()),
+          const SizedBox(height: 8),
+          ContinueCard(
+            page: lastPage,
+            onTap: () => _go(MushafReader(startPage: lastPage ?? 1)),
+          ),
+          StatsCard(
+            today: today,
+            goals: goals,
+            streak: streak,
+            onTap: () => _go(const StatsScreen()),
+          ),
+          TreeCard(
+            active: widget.active,
+            onTap: () => _go(const GrowthScreen()),
+          ),
+          if (verse != null)
+            DailyCard(label: 'آية اليوم', icon: Icons.menu_book, item: verse!),
+          if (hadith != null)
+            DailyCard(
+              label: 'حديث اليوم',
+              icon: Icons.format_quote,
+              item: hadith!,
+            ),
+          if (dua != null)
+            DailyCard(label: 'دعاء اليوم', icon: Icons.front_hand, item: dua!),
+        ],
+      ),
+    );
+  }
 }
