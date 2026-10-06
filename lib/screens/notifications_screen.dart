@@ -16,8 +16,11 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   bool loaded = false;
   bool prayers = false;
+  bool adhanSound = true;
   bool morning = false;
   bool evening = false;
+  int mMin = 6 * 60 + 30;
+  int eMin = 17 * 60 + 30;
   int before = 0;
   List<bool> each = List.filled(5, true);
   NotifStatus? st;
@@ -35,8 +38,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (!mounted) return;
     setState(() {
       prayers = p.getBool('n_prayers') ?? false;
+      adhanSound = p.getBool('n_adhan_sound') ?? true;
       morning = p.getBool('n_morning') ?? false;
       evening = p.getBool('n_evening') ?? false;
+      mMin = p.getInt('n_morning_min') ?? 6 * 60 + 30;
+      eMin = p.getInt('n_evening_min') ?? 17 * 60 + 30;
       before = p.getInt('n_before') ?? 0;
       each = List.generate(5, (i) => p.getBool('n_p$i') ?? true);
       loaded = true;
@@ -55,8 +61,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _save() async {
     final p = await SharedPreferences.getInstance();
     await p.setBool('n_prayers', prayers);
+    await p.setBool('n_adhan_sound', adhanSound);
     await p.setBool('n_morning', morning);
     await p.setBool('n_evening', evening);
+    await p.setInt('n_morning_min', mMin);
+    await p.setInt('n_evening_min', eMin);
     await p.setInt('n_before', before);
     for (var i = 0; i < 5; i++) {
       await p.setBool('n_p$i', each[i]);
@@ -84,31 +93,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Future<void> _test() async {
+  Future<void> _test(int kind) async {
     await requestNotificationPermissions();
-    final e = await sendTestNotification();
+    final e = await sendTest(kind);
     if (mounted) {
       setState(() => note =
-          e == null ? 'أُرسل الإشعار، شوف شريط الإشعارات' : 'فشل الإشعار: $e');
+          e == null ? 'أُرسل الإشعار، شوف شريط الإشعارات' : 'فشل: $e');
     }
     _status();
   }
 
   Future<void> _testLater() async {
     await requestNotificationPermissions();
-    final e = await scheduleTestIn(60);
+    final e = await scheduleTestIn(60, kAdhan);
     if (mounted) {
       setState(() => note = e == null
-          ? 'جُدول إشعار بعد دقيقة. اقفل الشاشة وانتظر'
+          ? 'جُدول أذان بعد دقيقة. اقفل الشاشة وانتظر'
           : 'فشلت الجدولة: $e');
     }
     _status();
   }
 
+  Future<void> _pick(bool isMorning) async {
+    final cur = isMorning ? mMin : eMin;
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: cur ~/ 60, minute: cur % 60),
+    );
+    if (t == null) return;
+    setState(() {
+      if (isMorning) {
+        mMin = t.hour * 60 + t.minute;
+      } else {
+        eMin = t.hour * 60 + t.minute;
+      }
+    });
+    _save();
+  }
+
   Widget _row(bool? ok, String title, String value, {Widget? action}) {
-    final color = ok == null
-        ? Colors.grey
-        : (ok ? kGreen : Colors.redAccent);
+    final color =
+        ok == null ? Colors.grey : (ok ? kGreen : Colors.redAccent);
     final icon = ok == null
         ? Icons.help_outline
         : (ok ? Icons.check_circle : Icons.cancel);
@@ -178,6 +203,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 'تنبيهات مجدولة',
                 '${s.pending}',
               ),
+              if (s.items.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                  child: Text(
+                    'القادمة:',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              for (final it in s.items.take(8))
+                ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  title: Text(it.title, style: const TextStyle(fontSize: 13)),
+                  trailing: Text(
+                    it.when,
+                    style: const TextStyle(fontSize: 12, color: kGreen),
+                  ),
+                ),
               if (s.error.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.all(12),
@@ -199,9 +242,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 runSpacing: 8,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: _test,
+                    onPressed: () => _test(kPrayer),
                     icon: const Icon(Icons.notifications_active),
-                    label: const Text('تجربة الآن'),
+                    label: const Text('تجربة عادية'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _test(kAdhan),
+                    icon: const Icon(Icons.mosque),
+                    label: const Text('تجربة الأذان'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _test(kFajr),
+                    icon: const Icon(Icons.wb_twilight),
+                    label: const Text('تجربة أذان الفجر'),
                   ),
                   ElevatedButton.icon(
                     onPressed: _testLater,
@@ -222,12 +275,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _sw(String t, bool v, ValueChanged<bool> f) {
+  Widget _sw(String t, bool v, ValueChanged<bool> f, {String? sub}) {
     return SwitchListTile(
       title: Text(t),
+      subtitle: sub == null ? null : Text(sub),
       value: v,
       activeColor: kGreen,
       onChanged: f,
+    );
+  }
+
+  Widget _timeRow(String t, int mins, VoidCallback f) {
+    return ListTile(
+      dense: true,
+      title: Text(t),
+      trailing: Text(
+        TimeOfDay(hour: mins ~/ 60, minute: mins % 60).format(context),
+        style: const TextStyle(fontWeight: FontWeight.bold, color: kGreen),
+      ),
+      onTap: f,
     );
   }
 
@@ -255,6 +321,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   _save();
                 }),
                 if (prayers) ...[
+                  _sw(
+                    'صوت أذان المدينة المنورة',
+                    adhanSound,
+                    (v) {
+                      setState(() => adhanSound = v);
+                      _save();
+                    },
+                    sub: 'يعمل بصوت المنبّه، ارفع صوته بالجوال',
+                  ),
                   for (var i = 0; i < 5; i++)
                     _sw(_pn[i], each[i], (v) {
                       setState(() => each[i] = v);
@@ -266,10 +341,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       spacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        const Text('وقت التنبيه:'),
+                        const Text('تنبيه مسبق:'),
                         for (final m in [0, 5, 10, 15])
                           ChoiceChip(
-                            label: Text(m == 0 ? 'عند الأذان' : 'قبل $m د'),
+                            label: Text(m == 0 ? 'بدون' : 'قبل $m د'),
                             selected: before == m,
                             onSelected: (_) {
                               setState(() => before = m);
@@ -288,14 +363,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             color: kCardBackground,
             child: Column(
               children: [
-                _sw('تذكير أذكار الصباح (بعد الفجر بنصف ساعة)', morning, (v) {
+                _sw('تذكير أذكار الصباح (يومياً)', morning, (v) {
                   setState(() => morning = v);
                   _save();
                 }),
-                _sw('تذكير أذكار المساء (بعد العصر بنصف ساعة)', evening, (v) {
+                if (morning)
+                  _timeRow('وقت أذكار الصباح', mMin, () => _pick(true)),
+                _sw('تذكير أذكار المساء (يومياً)', evening, (v) {
                   setState(() => evening = v);
                   _save();
                 }),
+                if (evening)
+                  _timeRow('وقت أذكار المساء', eMin, () => _pick(false)),
               ],
             ),
           ),
