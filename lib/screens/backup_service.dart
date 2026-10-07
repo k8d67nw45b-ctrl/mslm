@@ -16,6 +16,7 @@ const _prefixes = [
   'n_morning',
   'n_evening',
   'n_before',
+  'n_adhan_sound',
   'calc_method',
   'madhab',
   'angle_',
@@ -28,6 +29,10 @@ const _prefixes = [
   'nawawi_favs',
   'loc_',
   'occ_',
+  'pt_',
+  'qada_',
+  'zk_',
+  'ram_',
 ];
 
 bool _wanted(String k) => _prefixes.any((p) => k.startsWith(p));
