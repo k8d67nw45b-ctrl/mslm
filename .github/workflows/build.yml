@@ -15,6 +15,9 @@ on:
 permissions:
   contents: write
 
+env:
+  APP_ID: com.rafiqalmuslim.app
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -173,7 +176,8 @@ jobs:
       - name: Patch gradle
         run: |
           python3 - <<'PY'
-          import os
+          import os, re
+          app_id = os.environ.get('APP_ID', '')
           for fn in ('android/app/build.gradle.kts', 'android/app/build.gradle'):
               if not os.path.exists(fn):
                   continue
@@ -188,9 +192,12 @@ jobs:
                   dep = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
               if 'desugar_jdk_libs' not in s:
                   s += '\ndependencies {\n    ' + dep + '\n}\n'
+              if app_id:
+                  s = re.sub(r'applicationId\s*=?\s*"[^"]*"', 'applicationId = "%s"' % app_id, s, count=1)
               open(fn, 'w', encoding='utf-8').write(s)
               print('patched', fn)
           PY
+          grep -n "applicationId" android/app/build.gradle* || true
           cat android/app/build.gradle* | head -80
 
       - name: Disable shrinking for notifications
@@ -215,6 +222,61 @@ jobs:
           PY
           mkdir -p android/app/src/main/res/raw
           printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ic_stat,@mipmap/ic_launcher,@raw/adhan_madinah,@raw/adhan_fajr" />' > android/app/src/main/res/raw/keep.xml
+
+      - name: Configure release signing
+        env:
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          pw = os.environ.get('KS_PASS', '')
+          ks = os.path.abspath('signing/release.jks')
+          if not pw or not os.path.exists(ks):
+              print('No release keystore or password found: the APK will use the debug key')
+              raise SystemExit(0)
+          for fn in ('android/app/build.gradle.kts', 'android/app/build.gradle'):
+              if not os.path.exists(fn):
+                  continue
+              s = open(fn, encoding='utf-8').read()
+              kts = fn.endswith('.kts')
+              if 'KS_FILE' in s:
+                  continue
+              if kts:
+                  block = ('signingConfigs {\n'
+                           '        create("release") {\n'
+                           '            storeFile = file(System.getenv("KS_FILE"))\n'
+                           '            storePassword = System.getenv("KS_PASS")\n'
+                           '            keyAlias = "rafiq"\n'
+                           '            keyPassword = System.getenv("KS_PASS")\n'
+                           '        }\n'
+                           '    }\n\n    ')
+                  use = 'signingConfig = signingConfigs.getByName("release")'
+              else:
+                  block = ('signingConfigs {\n'
+                           '        release {\n'
+                           '            storeFile file(System.getenv("KS_FILE"))\n'
+                           '            storePassword System.getenv("KS_PASS")\n'
+                           '            keyAlias "rafiq"\n'
+                           '            keyPassword System.getenv("KS_PASS")\n'
+                           '        }\n'
+                           '    }\n\n    ')
+                  use = 'signingConfig signingConfigs.release'
+              i = s.find('buildTypes')
+              if i < 0:
+                  print('buildTypes not found in', fn)
+                  continue
+              s = s[:i] + block + s[i:]
+              pat = re.compile(r'signingConfig\s*=?\s*signingConfigs[^\n]*')
+              if pat.search(s):
+                  s = pat.sub(use, s, count=1)
+              else:
+                  b = s.find('buildTypes')
+                  j = s.find('release {', b)
+                  if j >= 0:
+                      s = s[:j] + 'release {\n            ' + use + s[j + len('release {'):]
+              open(fn, 'w', encoding='utf-8').write(s)
+              print('signing configured in', fn)
+          PY
 
       - name: Add adhan sounds
         run: |
@@ -435,7 +497,21 @@ jobs:
       - run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --target-platform ${{ github.event.inputs.abi || 'android-arm64' }} --obfuscate --split-debug-info=build/debug-info
+        env:
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_FILE: ${{ github.workspace }}/signing/release.jks
+        run: flutter build apk --release --build-name=1.1.0 --build-number=${{ github.run_number }} --target-platform ${{ github.event.inputs.abi || 'android-arm64' }} --obfuscate --split-debug-info=build/debug-info
+
+      - name: Show signing certificate
+        run: |
+          F=build/app/outputs/flutter-apk/app-release.apk
+          AP=$(ls $ANDROID_HOME/build-tools/*/apksigner | tail -1)
+          $AP verify --print-certs $F | head -4 || true
+          if $AP verify --print-certs $F | grep -q "Android Debug"; then
+            echo "WARNING: APK is signed with the DEBUG key"
+          else
+            echo "APK is signed with your release key"
+          fi
 
       - name: APK size
         run: |
