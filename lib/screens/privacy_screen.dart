@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/constants.dart';
 
 // ضع بريدك هنا ليظهر بآخر الصفحة، ويكون هو نفسه بالنص المنشور
-const String kContactEmail = ffaaddss2010@gmail.com '';
+const String kContactEmail = 'ffaaddss2010@gmail.com';
 
 class _Sec {
   final String title;
