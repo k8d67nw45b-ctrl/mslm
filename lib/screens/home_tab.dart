@@ -11,6 +11,7 @@ import 'hijri_calendar_screen.dart';
 import 'hisn_detail.dart';
 import 'hisn_screen.dart';
 import 'hisn_service.dart';
+import 'home_cards2.dart';
 import 'home_daily_card.dart';
 import 'home_extras.dart';
 import 'home_prayers.dart';
@@ -24,7 +25,9 @@ import 'notification_service.dart';
 import 'notifications_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
+import 'prayer_tracker_screen.dart';
 import 'qibla_screen.dart';
+import 'ramadan_screen.dart';
 import 'ruqyah_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
@@ -32,6 +35,7 @@ import 'sky_hero.dart';
 import 'stats_screen.dart';
 import 'stats_service.dart';
 import 'tasbih_screen.dart';
+import 'zakat_screen.dart';
 
 class HomeTab extends StatefulWidget {
   final bool active;
@@ -54,6 +58,7 @@ class _HomeTabState extends State<HomeTab> {
   Goals goals = const Goals(5, 100);
   DayStats? today;
   int streak = 0;
+  int tick = 0;
   int _day = DateTime.now().day;
   Timer? _timer;
 
@@ -184,6 +189,7 @@ class _HomeTabState extends State<HomeTab> {
       goals = g;
       today = t;
       streak = s;
+      tick++;
     });
   }
 
@@ -222,6 +228,12 @@ class _HomeTabState extends State<HomeTab> {
 
   List<Shortcut> _shortcuts() {
     return [
+      Shortcut('متابعة الصلوات', Icons.fact_check, const Color(0xFFDCEBE3),
+          () => _go(const PrayerTrackerScreen())),
+      Shortcut('رمضان', Icons.nightlight_round, const Color(0xFFDDDCEB),
+          () => _go(const RamadanScreen())),
+      Shortcut('زكاة المال', Icons.calculate, const Color(0xFFEBE6DC),
+          () => _go(const ZakatScreen())),
       Shortcut('التقويم الهجري', Icons.calendar_month, const Color(0xFFE0EBDC),
           () => _go(const HijriCalendarScreen())),
       Shortcut('شجرة التزامك', Icons.park, const Color(0xFFDCEBE3),
@@ -321,6 +333,11 @@ class _HomeTabState extends State<HomeTab> {
             onTheme: ThemeController.toggle,
             onAdhkar: _openNow,
           ),
+          RamadanHomeCard(
+            active: widget.active,
+            tick: tick,
+            onTap: () => _go(const RamadanScreen()),
+          ),
           OccasionCard(active: widget.active),
           SectionTitle(
             'أوقات الصلاة',
@@ -333,6 +350,11 @@ class _HomeTabState extends State<HomeTab> {
             ),
           ),
           _prayers(),
+          PrayerDotsCard(
+            active: widget.active,
+            tick: tick,
+            onTap: () => _go(const PrayerTrackerScreen()),
+          ),
           const SectionTitle('تطبيقاتك اليومية'),
           ShortcutRow(items: _shortcuts()),
           const SizedBox(height: 8),
