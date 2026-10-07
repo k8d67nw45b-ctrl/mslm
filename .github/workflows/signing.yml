@@ -1,0 +1,33 @@
+name: Create signing key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate keystore
+        env:
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -f signing/release.jks ]; then
+            echo "Keystore already exists. Nothing to do."
+            exit 0
+          fi
+          if [ -z "$KS_PASS" ]; then
+            echo "Missing secret KEYSTORE_PASSWORD"
+            exit 1
+          fi
+          mkdir -p signing
+          keytool -genkeypair -keystore signing/release.jks -storetype PKCS12 -alias rafiq -keyalg RSA -keysize 2048 -validity 10000 -storepass "$KS_PASS" -keypass "$KS_PASS" -dname "CN=Rafiq Al-Muslim, OU=Mobile, O=Rafiq Al-Muslim"
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add signing/release.jks
+          git commit -m "Add release keystore"
+          git push
