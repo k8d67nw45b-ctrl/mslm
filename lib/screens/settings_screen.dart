@@ -9,6 +9,7 @@ import 'backup_service.dart';
 import 'location_service.dart';
 import 'notification_service.dart';
 import 'notifications_screen.dart';
+import 'privacy_screen.dart';
 
 const _credits = 'صفحات المصحف: مصحف المدينة (خط مجمع الملك فهد V4) '
     'عبر SakinaDevGroup/mushaf-madani-cdn.\n'
@@ -438,16 +439,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _title('عن التطبيق'),
           Card(
             color: kCardBackground,
-            child: ListTile(
-              leading: const Icon(Icons.info_outline, color: kGreen),
-              title: const Text(appName),
-              subtitle: const Text('الإصدار 1.1.0 • المصادر والشكر'),
-              onTap: () => showAboutDialog(
-                context: context,
-                applicationName: appName,
-                applicationVersion: '1.1.0',
-                children: const [Text(_credits)],
-              ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined, color: kGreen),
+                  title: const Text('سياسة الخصوصية'),
+                  trailing: const Icon(Icons.chevron_left),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PrivacyScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline, color: kGreen),
+                  title: const Text(appName),
+                  subtitle: const Text('الإصدار 1.1.0 • المصادر والشكر'),
+                  onTap: () => showAboutDialog(
+                    context: context,
+                    applicationName: appName,
+                    applicationVersion: '1.1.0',
+                    children: const [Text(_credits)],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
