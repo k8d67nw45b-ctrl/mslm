@@ -35,6 +35,9 @@ Future<int> loadActiveDays() async {
         final i = rest.lastIndexOf('_');
         if (i > 0) days.add(rest.substring(0, i));
       }
+    } else if (k.startsWith('pt_')) {
+      final s = p.getString(k) ?? '';
+      if (s.contains('1') || s.contains('2')) days.add(k.substring(3));
     }
   }
   return days.length;
