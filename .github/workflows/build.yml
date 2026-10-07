@@ -10,14 +10,14 @@ on:
         default: 'android-arm64'
       target_mb:
         description: 'Quran pages target size in MB'
-        default: '46'
+        default: '38'
 
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -45,12 +45,12 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v4-${{ github.event.inputs.target_mb || '46' }}
+          key: quran-assets-v5-${{ github.event.inputs.target_mb || '38' }}
 
       - name: Download Quran assets
         if: steps.qcache.outputs.cache-hit != 'true'
         env:
-          TARGET_MB: ${{ github.event.inputs.target_mb || '46' }}
+          TARGET_MB: ${{ github.event.inputs.target_mb || '38' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y webp imagemagick
@@ -88,26 +88,47 @@ jobs:
           test "$(ls /tmp/orig | wc -l)" -eq 604
           du -sh /tmp/orig
           file /tmp/orig/p1.png /tmp/orig/p300.png
-          cat > /tmp/cv.sh <<'SH'
-          #!/bin/sh
-          p="$1"
-          convert "/tmp/orig/p$p.png" -strip -resize "${PCT}%" -colors "$COLORS" +dither "/tmp/q$p.png" || exit 1
-          cwebp -quiet -lossless -z 6 "/tmp/q$p.png" -o "assets/mushaf/p$p.webp" || exit 1
-          rm -f "/tmp/q$p.png"
-          SH
-          chmod +x /tmp/cv.sh
-          for CFG in 48:100 32:100 24:100 20:100 24:92 20:90; do
-            export COLORS=${CFG%%:*}
-            export PCT=${CFG##*:}
-            rm -f assets/mushaf/*.webp
-            seq 1 604 | xargs -P 4 -n 1 /tmp/cv.sh
-            SIZE=$(du -sm assets/mushaf | cut -f1)
-            echo "RESULT colors=$COLORS scale=${PCT}% size=${SIZE}MB target=${TARGET_MB}MB"
-            if [ "$SIZE" -le "$TARGET_MB" ]; then
+          cat > /tmp/cal.sh <<'SH'
+          #!/bin/bash
+          SAMPLES="1 2 50 100 150 200 250 300 350 400 450 500 550 600"
+          N=14
+          CHOSEN=""
+          for CFG in 100:85 100:75 100:65 90:80 90:70 80:80 80:70 75:75 75:65 70:70 70:60 65:60 60:60; do
+            S=${CFG%%:*}
+            Q=${CFG##*:}
+            TOTAL=0
+            for p in $SAMPLES; do
+              convert "/tmp/orig/p$p.png" -strip -resize "${S}%" /tmp/cal.png
+              cwebp -quiet -q "$Q" -m 6 /tmp/cal.png -o /tmp/cal.webp
+              TOTAL=$((TOTAL + $(stat -c%s /tmp/cal.webp)))
+            done
+            AVG=$((TOTAL / N))
+            EST=$((AVG * 604 / 1048576))
+            echo "CAL scale=${S}% q=${Q} avg=$((AVG / 1024))KB est=${EST}MB target=${TARGET_MB}MB"
+            CHOSEN=$CFG
+            if [ "$EST" -le "$TARGET_MB" ]; then
               break
             fi
           done
+          echo "$CHOSEN" > /tmp/chosen.txt
+          SH
+          bash /tmp/cal.sh
+          CFG=$(cat /tmp/chosen.txt)
+          export SCALE=${CFG%%:*}
+          export QUAL=${CFG##*:}
+          echo "FINAL scale=${SCALE}% q=${QUAL}"
+          cat > /tmp/cv.sh <<'SH'
+          #!/bin/sh
+          p="$1"
+          convert "/tmp/orig/p$p.png" -strip -resize "${SCALE}%" "/tmp/q$p.png" || exit 1
+          cwebp -quiet -q "$QUAL" -m 6 "/tmp/q$p.png" -o "assets/mushaf/p$p.webp" || exit 1
+          rm -f "/tmp/q$p.png"
+          SH
+          chmod +x /tmp/cv.sh
+          rm -f assets/mushaf/*.webp
+          seq 1 604 | xargs -P 4 -n 1 /tmp/cv.sh
           test "$(ls assets/mushaf | wc -l)" -eq 604
+          echo "RESULT final scale=${SCALE}% q=${QUAL} size=$(du -sm assets/mushaf | cut -f1)MB target=${TARGET_MB}MB"
           du -sh assets/mushaf
 
       - name: Save Quran assets
@@ -117,7 +138,11 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v4-${{ github.event.inputs.target_mb || '46' }}
+          key: quran-assets-v5-${{ github.event.inputs.target_mb || '38' }}
+
+      - name: Size report of assets
+        run: |
+          du -sh assets/mushaf assets/data adhan_audio || true
 
       - name: Download adhkar data
         run: |
@@ -418,6 +443,8 @@ jobs:
           ls -l $F
           MB=$(( $(stat -c%s $F) / 1048576 ))
           echo "APK size: ${MB} MB"
+          echo "Largest files inside the APK:"
+          unzip -l $F | sort -k1 -nr | head -12
           if [ "$MB" -gt 65 ]; then
             echo "WARNING: APK is larger than 65 MB"
           fi
