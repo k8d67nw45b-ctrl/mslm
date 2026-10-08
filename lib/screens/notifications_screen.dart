@@ -19,6 +19,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool adhanSound = true;
   bool morning = false;
   bool evening = false;
+  bool suhoor = false;
+  bool iftar = false;
+  int sMin = 45;
+  int iMin = 10;
   int mMin = 6 * 60 + 30;
   int eMin = 17 * 60 + 30;
   int before = 0;
@@ -41,6 +45,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       adhanSound = p.getBool('n_adhan_sound') ?? true;
       morning = p.getBool('n_morning') ?? false;
       evening = p.getBool('n_evening') ?? false;
+      suhoor = p.getBool('n_suhoor') ?? false;
+      iftar = p.getBool('n_iftar') ?? false;
+      sMin = p.getInt('n_suhoor_min') ?? 45;
+      iMin = p.getInt('n_iftar_min') ?? 10;
       mMin = p.getInt('n_morning_min') ?? 6 * 60 + 30;
       eMin = p.getInt('n_evening_min') ?? 17 * 60 + 30;
       before = p.getInt('n_before') ?? 0;
@@ -64,6 +72,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await p.setBool('n_adhan_sound', adhanSound);
     await p.setBool('n_morning', morning);
     await p.setBool('n_evening', evening);
+    await p.setBool('n_suhoor', suhoor);
+    await p.setBool('n_iftar', iftar);
+    await p.setInt('n_suhoor_min', sMin);
+    await p.setInt('n_iftar_min', iMin);
     await p.setInt('n_morning_min', mMin);
     await p.setInt('n_evening_min', eMin);
     await p.setInt('n_before', before);
@@ -71,7 +83,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await p.setBool('n_p$i', each[i]);
     }
     var msg = '';
-    if (prayers || morning || evening) {
+    if (prayers || morning || evening || suhoor || iftar) {
       try {
         final ok = await requestNotificationPermissions();
         if (!ok) msg = 'إذن الإشعارات غير ممنوح';
@@ -297,6 +309,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  Widget _chips(
+    String label,
+    List<int> values,
+    int cur,
+    String Function(int) txt,
+    ValueChanged<int> f,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(label),
+          for (final m in values)
+            ChoiceChip(
+              label: Text(txt(m)),
+              selected: cur == m,
+              onSelected: (_) => f(m),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!loaded) {
@@ -335,24 +372,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       setState(() => each[i] = v);
                       _save();
                     }),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        const Text('تنبيه مسبق:'),
-                        for (final m in [0, 5, 10, 15])
-                          ChoiceChip(
-                            label: Text(m == 0 ? 'بدون' : 'قبل $m د'),
-                            selected: before == m,
-                            onSelected: (_) {
-                              setState(() => before = m);
-                              _save();
-                            },
-                          ),
-                      ],
-                    ),
+                  _chips(
+                    'تنبيه مسبق:',
+                    const [0, 5, 10, 15],
+                    before,
+                    (m) => m == 0 ? 'بدون' : 'قبل $m د',
+                    (m) {
+                      setState(() => before = m);
+                      _save();
+                    },
                   ),
                 ],
               ],
@@ -375,6 +403,62 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 }),
                 if (evening)
                   _timeRow('وقت أذكار المساء', eMin, () => _pick(false)),
+              ],
+            ),
+          ),
+          const SizedBox(height: kPaddingMedium),
+          Card(
+            color: kCardBackground,
+            child: Column(
+              children: [
+                _sw(
+                  'تنبيه السحور',
+                  suhoor,
+                  (v) {
+                    setState(() => suhoor = v);
+                    _save();
+                  },
+                  sub: 'خلال رمضان فقط',
+                ),
+                if (suhoor)
+                  _chips(
+                    'قبل أذان الفجر بـ:',
+                    const [30, 45, 60],
+                    sMin,
+                    (m) => '$m د',
+                    (m) {
+                      setState(() => sMin = m);
+                      _save();
+                    },
+                  ),
+                _sw(
+                  'تنبيه الإفطار',
+                  iftar,
+                  (v) {
+                    setState(() => iftar = v);
+                    _save();
+                  },
+                  sub: 'خلال رمضان فقط',
+                ),
+                if (iftar)
+                  _chips(
+                    'قبل أذان المغرب بـ:',
+                    const [0, 5, 10, 15],
+                    iMin,
+                    (m) => m == 0 ? 'عند الأذان' : '$m د',
+                    (m) {
+                      setState(() => iMin = m);
+                      _save();
+                    },
+                  ),
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text(
+                    'بداية رمضان بالتقويم الحسابي (أم القرى)، وقد تختلف يوماً '
+                    'عن الإعلان الرسمي. عدّلها من الإعدادات.',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ),
               ],
             ),
           ),
