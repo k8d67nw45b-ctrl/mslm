@@ -14,6 +14,7 @@ const int kWird = 2;
 const int kOcc = 3;
 const int kAdhan = 4;
 const int kFajr = 5;
+const int kRamadan = 6;
 
 final FlutterLocalNotificationsPlugin _plugin =
     FlutterLocalNotificationsPlugin();
@@ -119,6 +120,7 @@ NotificationDetails _details(int kind) {
     'occasions_reminders_v2',
     'adhan_madinah_v1',
     'adhan_fajr_v1',
+    'ramadan_reminders_v1',
   ];
   const titles = [
     'تنبيهات الصلاة',
@@ -127,6 +129,7 @@ NotificationDetails _details(int kind) {
     'المناسبات',
     'أذان المدينة المنورة',
     'أذان الفجر',
+    'رمضان',
   ];
   AndroidNotificationSound? sound;
   var usage = AudioAttributesUsage.notification;
@@ -161,8 +164,9 @@ Future<bool> _schedule(
 }) async {
   final when = tz.TZDateTime.from(at, tz.UTC);
   final l = at.toLocal();
-  final payload =
-      daily ? 'daily|${_two(l.hour)}:${_two(l.minute)}' : at.toUtc().toIso8601String();
+  final payload = daily
+      ? 'daily|${_two(l.hour)}:${_two(l.minute)}'
+      : at.toUtc().toIso8601String();
   Future<void> go(AndroidScheduleMode mode) {
     return _plugin.zonedSchedule(
       id,
@@ -294,6 +298,10 @@ Future<int> rescheduleAll({bool force = false}) async {
   final morningOn = p.getBool('n_morning') ?? false;
   final eveningOn = p.getBool('n_evening') ?? false;
   final adhanOn = p.getBool('n_adhan_sound') ?? true;
+  final suhoorOn = p.getBool('n_suhoor') ?? false;
+  final iftarOn = p.getBool('n_iftar') ?? false;
+  final sMin = p.getInt('n_suhoor_min') ?? 45;
+  final iMin = p.getInt('n_iftar_min') ?? 10;
   final mMin = p.getInt('n_morning_min') ?? 6 * 60 + 30;
   final eMin = p.getInt('n_evening_min') ?? 17 * 60 + 30;
   final khOn =
@@ -303,15 +311,16 @@ Future<int> rescheduleAll({bool force = false}) async {
         for (var i = 0; i < kOccasions.length; i++)
           p.getBool('occ_on_$i') ?? false,
       ].any((b) => b);
+  final ramOn = suhoorOn || iftarOn;
   final other = morningOn || eveningOn || khOn || occOn;
-  if (!prayersOn && !other) {
+  if (!prayersOn && !ramOn && !other) {
     await _plugin.cancelAll();
     await p.setString('n_sig', '');
     return 0;
   }
 
   LatLon? loc;
-  if (prayersOn) {
+  if (prayersOn || ramOn) {
     try {
       loc = await getLocation();
     } catch (_) {
@@ -327,51 +336,89 @@ Future<int> rescheduleAll({bool force = false}) async {
     for (var i = 0; i < kOccasions.length; i++)
       (p.getBool('occ_on_$i') ?? false) ? '1' : '0',
   ].join();
-  final sig = 'v3|${loc?.lat.toStringAsFixed(2)},${loc?.lon.toStringAsFixed(2)}'
+  final sig = 'v4|${loc?.lat.toStringAsFixed(2)},${loc?.lon.toStringAsFixed(2)}'
       '|$prayersOn$morningOn$eveningOn$adhanOn|$mMin|$eMin|$before'
       '|${each.join()}|${now.year}-${now.month}-${now.day}'
       '|${p.getString('calc_method')}|${p.getString('madhab')}'
       '|${p.getDouble('angle_fajr')}|${p.getDouble('angle_isha')}'
       '|$khOn|$khTime|$occSig|${p.getBool('occ_weekly')}'
-      '|${AppSettings.hijriOffset.value}';
+      '|${AppSettings.hijriOffset.value}'
+      '|$suhoorOn$iftarOn|$sMin|$iMin';
   if (!force && p.getString('n_sig') == sig) return 0;
 
   await _plugin.cancelAll();
   var count = 0;
 
-  if (prayersOn && loc != null) {
+  if ((prayersOn || ramOn) && loc != null) {
     final coords = Coordinates(loc.lat, loc.lon);
     final params = await loadCalcParams();
     for (var d = 0; d < 7; d++) {
       final day = now.add(Duration(days: d));
       final t = PrayerTimes(coords, DateComponents.from(day), params);
       final times = [t.fajr, t.dhuhr, t.asr, t.maghrib, t.isha];
-      for (var k = 0; k < 5; k++) {
-        if (!each[k]) continue;
-        final at = times[k];
-        final kind = adhanOn ? (k == 0 ? kFajr : kAdhan) : kPrayer;
-        if (at.isAfter(now)) {
-          if (await _schedule(
-            d * 10 + k,
-            'حان وقت صلاة ${_names[k]}',
-            'حسب موقعك: ${loc.name}',
-            at,
-            kind,
-          )) {
-            count++;
-          }
-        }
-        if (before > 0) {
-          final pre = at.subtract(Duration(minutes: before));
-          if (pre.isAfter(now)) {
+      if (prayersOn) {
+        for (var k = 0; k < 5; k++) {
+          if (!each[k]) continue;
+          final at = times[k];
+          final kind = adhanOn ? (k == 0 ? kFajr : kAdhan) : kPrayer;
+          if (at.isAfter(now)) {
             if (await _schedule(
-              700 + d * 10 + k,
-              'اقترب وقت صلاة ${_names[k]}',
-              'بقي $before دقائق على الأذان',
-              pre,
-              kPrayer,
+              d * 10 + k,
+              'حان وقت صلاة ${_names[k]}',
+              'حسب موقعك: ${loc.name}',
+              at,
+              kind,
             )) {
               count++;
+            }
+          }
+          if (before > 0) {
+            final pre = at.subtract(Duration(minutes: before));
+            if (pre.isAfter(now)) {
+              if (await _schedule(
+                700 + d * 10 + k,
+                'اقترب وقت صلاة ${_names[k]}',
+                'بقي $before دقائق على الأذان',
+                pre,
+                kPrayer,
+              )) {
+                count++;
+              }
+            }
+          }
+        }
+      }
+      if (ramOn) {
+        final dd = DateTime(day.year, day.month, day.day);
+        if (hijriOf(dd).hMonth == 9) {
+          if (suhoorOn) {
+            final at = t.fajr.subtract(Duration(minutes: sMin));
+            if (at.isAfter(now)) {
+              if (await _schedule(
+                400 + d * 4,
+                'وقت السحور',
+                'بقي $sMin دقيقة على أذان الفجر',
+                at,
+                kRamadan,
+              )) {
+                count++;
+              }
+            }
+          }
+          if (iftarOn) {
+            final at = t.maghrib.subtract(Duration(minutes: iMin));
+            if (at.isAfter(now)) {
+              if (await _schedule(
+                401 + d * 4,
+                iMin == 0 ? 'حان وقت الإفطار' : 'اقترب الإفطار',
+                iMin == 0
+                    ? 'تقبّل الله صيامك'
+                    : 'بقي $iMin دقيقة على أذان المغرب',
+                at,
+                kRamadan,
+              )) {
+                count++;
+              }
             }
           }
         }
