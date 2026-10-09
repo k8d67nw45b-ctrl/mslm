@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
-import '../core/theme_controller.dart';
 import 'home_tab.dart';
-import 'quran_screen.dart';
+import 'quran_home.dart';
 import 'adhkar_screen.dart';
 import 'prayer_screen.dart';
 import 'qibla_screen.dart';
-
-const _titles = ['الرئيسية', 'القرآن', 'الأذكار', 'الصلاة', 'القبلة'];
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -22,7 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _tab(int i) {
     switch (i) {
       case 1:
-        return const QuranScreen();
+        return const QuranHome();
       case 2:
         return const AdhkarScreen();
       case 3:
@@ -34,25 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dark = ThemeController.mode.value == ThemeMode.dark;
-    final showBar = _selectedIndex == 1 || _selectedIndex == 4;
     return PopScope(
       canPop: _selectedIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) setState(() => _selectedIndex = 0);
       },
       child: Scaffold(
-        appBar: showBar
-            ? AppBar(
-                title: Text(_titles[_selectedIndex]),
-                actions: [
-                  IconButton(
-                    icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
-                    onPressed: ThemeController.toggle,
-                  ),
-                ],
-              )
-            : null,
         body: Stack(
           fit: StackFit.expand,
           children: [
