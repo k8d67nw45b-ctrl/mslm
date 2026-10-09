@@ -4,6 +4,8 @@ import '../core/constants.dart';
 import 'moon.dart';
 import 'notification_service.dart';
 import 'occasions.dart';
+import 'rf_design.dart';
+import 'rf_page.dart';
 
 const _hm = [
   'محرم',
@@ -50,6 +52,21 @@ String _hDate(DateTime g) {
 }
 
 String _gDate(DateTime g) => '${g.day} ${_gm[g.month - 1]} ${g.year}';
+
+IconData _kindIcon(String k) {
+  switch (k) {
+    case 'fast':
+      return Icons.nightlight_round;
+    case 'season':
+      return Icons.star;
+    case 'eid':
+      return Icons.celebration;
+    case 'noFast':
+      return Icons.no_food;
+    default:
+      return Icons.event;
+  }
+}
 
 class _MoonMini extends CustomPainter {
   final double age;
@@ -244,25 +261,33 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     final isToday =
         d.year == today.year && d.month == today.month && d.day == today.day;
     final age = moonAge(DateTime(d.year, d.month, d.day, 12));
+    final fg = isToday ? Colors.white : null;
     return InkWell(
       onTap: () => _detail(d),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
-          color: kCardBackground,
-          borderRadius: BorderRadius.circular(10),
-          border: isToday ? Border.all(color: kGreen, width: 2) : null,
+          color: isToday ? kGreen : kGreen.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               '${h.hDay}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: fg,
+              ),
             ),
             Text(
               '${d.day}',
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 10,
+                color: isToday ? Colors.white70 : Colors.grey,
+              ),
             ),
             const SizedBox(height: 2),
             SizedBox(
@@ -279,7 +304,10 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
                     width: 5,
                     height: 5,
                     margin: const EdgeInsets.symmetric(horizontal: 1),
-                    decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                      color: isToday ? Colors.white : c,
+                      shape: BoxShape.circle,
+                    ),
                   ),
               ],
             ),
@@ -304,189 +332,193 @@ class _HijriCalendarScreenState extends State<HijriCalendarScreen> {
     );
   }
 
-  Widget _calTab() {
+  Widget _calendar() {
     final today = DateTime.now();
     final first = _first(ref);
     final days = _monthDays(first);
     final last = days.last;
     final h0 = hijriOf(first);
     final lead = (first.weekday + 1) % 7;
-    return ListView(
-      padding: const EdgeInsets.all(kPaddingMedium),
-      children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.chevron_right),
-              onPressed: () => setState(
-                () => ref = DateTime(first.year, first.month, first.day - 1),
+    return RfCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => setState(
+                  () => ref = DateTime(first.year, first.month, first.day - 1),
+                ),
               ),
-            ),
-            Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    '${_hm[h0.hMonth - 1]} ${h0.hYear}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    '${_gm[first.month - 1]} ${first.year} - '
-                    '${_gm[last.month - 1]} ${last.year}',
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.chevron_left),
-              onPressed: () => setState(
-                () => ref = DateTime(last.year, last.month, last.day + 1),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            for (final w in _wd)
               Expanded(
-                child: Center(
-                  child: Text(
-                    w,
-                    style: const TextStyle(
-                      color: kGreen,
-                      fontWeight: FontWeight.bold,
+                child: Column(
+                  children: [
+                    Text(
+                      '${_hm[h0.hMonth - 1]} ${h0.hYear} هـ',
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '${_gm[first.month - 1]} ${first.year} - '
+                      '${_gm[last.month - 1]} ${last.year}',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => setState(
+                  () => ref = DateTime(last.year, last.month, last.day + 1),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              for (final w in _wd)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      w,
+                      style: const TextStyle(
+                        color: kGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        GridView.count(
-          crossAxisCount: 7,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 0.74,
-          children: [
-            for (var i = 0; i < lead; i++) const SizedBox.shrink(),
-            for (final d in days) _cell(d, today),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 4,
-          children: [
-            _legend(kGreen, 'صيام مستحب'),
-            _legend(const Color(0xFFD4AF37), 'أيام فاضلة'),
-            _legend(Colors.redAccent, 'لا يصام'),
-            _legend(Colors.lightBlueAccent, 'حدث'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'التقويم حسابي (أم القرى) وقد يختلف بيوم عن رؤية الهلال بمنطقتك، '
-          'وتقدر تعدّله من الإعدادات. أطوار القمر تقريبية للعرض فقط.',
-          style: TextStyle(color: Colors.grey, fontSize: 12),
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 0.74,
+            children: [
+              for (var i = 0; i < lead; i++) const SizedBox.shrink(),
+              for (final d in days) _cell(d, today),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            children: [
+              _legend(kGreen, 'صيام مستحب'),
+              _legend(const Color(0xFFD4AF37), 'أيام فاضلة'),
+              _legend(Colors.redAccent, 'لا يصام'),
+              _legend(Colors.lightBlueAccent, 'حدث'),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _occTile(Upcoming u) {
     final idx = kOccasions.indexOf(u.o);
     final h = hijriOf(u.date);
-    final badge = u.inDays == 0 ? 'اليوم' : '${u.inDays}';
-    return Card(
-      color: kCardBackground,
-      margin: const EdgeInsets.only(bottom: kPaddingSmall),
-      child: ListTile(
-        leading: Container(
-          width: 52,
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: kGreen.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(14),
+    final when = u.inDays == 0
+        ? 'اليوم'
+        : (u.inDays == 1 ? 'غداً' : 'بعد ${u.inDays} يوم');
+    return RfCard(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      radius: 18,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: rfDeep,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(_kindIcon(u.o.kind), color: Colors.white),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                badge,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: kGreen,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  u.o.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              if (u.inDays != 0)
-                const Text('يوم', style: TextStyle(fontSize: 10)),
-            ],
+                Text(
+                  '$when • ${h.hDay} ${_hm[h.hMonth - 1]} ${h.hYear} هـ',
+                  style: const TextStyle(color: kGreen, fontSize: 12),
+                ),
+                Text(
+                  u.o.source.isEmpty
+                      ? u.o.note
+                      : '${u.o.note}\nالمصدر: ${u.o.source}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 11),
+                ),
+              ],
+            ),
           ),
-        ),
-        title: Text(u.o.name),
-        subtitle: Text(
-          '${h.hDay} ${_hm[h.hMonth - 1]} • ${_gDate(u.date)}\n'
-          '${u.o.note}'
-          '${u.o.source.isEmpty ? '' : '\nالمصدر: ${u.o.source}'}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        isThreeLine: true,
-        trailing: idx < 0
-            ? null
-            : Switch(
-                value: on.contains(idx),
-                activeColor: kGreen,
-                onChanged: (v) => _toggle(idx, v),
-              ),
+          if (idx >= 0)
+            Switch(
+              value: on.contains(idx),
+              activeColor: kGreen,
+              onChanged: (v) => _toggle(idx, v),
+            ),
+        ],
       ),
-    );
-  }
-
-  Widget _occTab() {
-    return ListView(
-      padding: const EdgeInsets.all(kPaddingMedium),
-      children: [
-        Card(
-          color: kCardBackground,
-          child: SwitchListTile(
-            title: const Text('تذكير بصيام الاثنين والخميس'),
-            subtitle: const Text('تنبيه مساء اليوم السابق'),
-            value: weekly,
-            activeColor: kGreen,
-            onChanged: _toggleWeekly,
-          ),
-        ),
-        const SizedBox(height: kPaddingSmall),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            'المناسبات القادمة (فعّل الجرس للتذكير مساء اليوم السابق)',
-            style: TextStyle(color: kGreen, fontWeight: FontWeight.bold),
-          ),
-        ),
-        if (up.isEmpty) const Center(child: CircularProgressIndicator()),
-        for (final u in up) _occTile(u),
-      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('التقويم الهجري'),
-          bottom: const TabBar(
-            tabs: [Tab(text: 'التقويم'), Tab(text: 'المناسبات')],
+    final h = hijriOf(DateTime.now());
+    return Scaffold(
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 28),
+        children: [
+          RfPageHeader(
+            title: 'التقويم الإسلامي',
+            subtitle: '${h.hDay} ${_hm[h.hMonth - 1]} ${h.hYear} هـ',
           ),
-        ),
-        body: TabBarView(children: [_calTab(), _occTab()]),
+          _calendar(),
+          RfCard(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              title: const Text('تذكير بصيام الاثنين والخميس'),
+              subtitle: const Text('تنبيه مساء اليوم السابق'),
+              secondary: const Icon(Icons.notifications_active, color: kGreen),
+              value: weekly,
+              activeColor: kGreen,
+              onChanged: _toggleWeekly,
+            ),
+          ),
+          const RfSection('المناسبات القادمة', icon: Icons.event),
+          if (up.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          for (final u in up) _occTile(u),
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'التقويم حسابي (أم القرى) وقد يختلف بيوم عن رؤية الهلال بمنطقتك، '
+              'وتقدر تعدّله من الإعدادات. أطوار القمر تقريبية للعرض فقط. '
+              'فعّل الجرس بجانب أي مناسبة ليذكّرك مساء اليوم السابق.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }
