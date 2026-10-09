@@ -23,6 +23,7 @@ import 'mushaf_service.dart';
 import 'nawawi_screen.dart';
 import 'notification_service.dart';
 import 'notifications_screen.dart';
+import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
 import 'prayer_tracker_screen.dart';
 import 'ramadan_screen.dart';
