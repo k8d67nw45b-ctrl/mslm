@@ -8,30 +8,28 @@ import 'daily_content.dart';
 import 'growth_screen.dart';
 import 'hajj_screen.dart';
 import 'hijri_calendar_screen.dart';
-import 'hisn_detail.dart';
 import 'hisn_screen.dart';
-import 'hisn_service.dart';
 import 'home_cards2.dart';
 import 'home_daily_card.dart';
 import 'home_extras.dart';
-import 'home_prayers.dart';
+import 'home_hero2.dart';
 import 'home_sections.dart';
 import 'home_stats_card.dart';
+import 'home_widgets2.dart';
 import 'khatma_screen.dart';
+import 'location_service.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
 import 'nawawi_screen.dart';
 import 'notification_service.dart';
 import 'notifications_screen.dart';
-import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
 import 'prayer_tracker_screen.dart';
-import 'qibla_screen.dart';
 import 'ramadan_screen.dart';
+import 'rf_design.dart';
 import 'ruqyah_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
-import 'sky_hero.dart';
 import 'stats_screen.dart';
 import 'stats_service.dart';
 import 'tasbih_screen.dart';
@@ -39,7 +37,9 @@ import 'zakat_screen.dart';
 
 class HomeTab extends StatefulWidget {
   final bool active;
-  const HomeTab({Key? key, this.active = true}) : super(key: key);
+  final ValueChanged<int>? onSwitchTab;
+  const HomeTab({Key? key, this.active = true, this.onSwitchTab})
+      : super(key: key);
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -59,6 +59,8 @@ class _HomeTabState extends State<HomeTab> {
   DayStats? today;
   int streak = 0;
   int tick = 0;
+  String place = '';
+  bool notifOff = true;
   int _day = DateTime.now().day;
   Timer? _timer;
 
@@ -128,6 +130,7 @@ class _HomeTabState extends State<HomeTab> {
           ),
         ),
       );
+      _loadMisc();
     } catch (_) {}
   }
 
@@ -140,10 +143,12 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _loadPrayer() async {
     try {
       final d = await loadPrayerData();
+      final p = await SharedPreferences.getInstance();
       if (!mounted) return;
       setState(() {
         data = d;
         error = null;
+        place = p.getString('loc_name') ?? '';
         _day = DateTime.now().day;
       });
       _tick();
@@ -183,12 +188,17 @@ class _HomeTabState extends State<HomeTab> {
     final g = await loadGoals();
     final t = await loadToday();
     final s = await loadStreak();
+    final p = await SharedPreferences.getInstance();
+    final off = !((p.getBool('n_prayers') ?? false) ||
+        (p.getBool('n_morning') ?? false) ||
+        (p.getBool('n_evening') ?? false));
     if (!mounted) return;
     setState(() {
       lastPage = l;
       goals = g;
       today = t;
       streak = s;
+      notifOff = off;
       tick++;
     });
   }
@@ -201,78 +211,42 @@ class _HomeTabState extends State<HomeTab> {
     _loadMisc();
   }
 
-  Future<void> _openSleep() async {
+  Future<void> _pickCity() async {
+    final ok = await showCityPicker(context);
+    if (!ok) return;
+    await _loadPrayer();
     try {
-      final all = await loadHisn();
-      final s = all.firstWhere((e) => e.title.contains('أذكار النوم'));
-      if (!mounted) return;
-      await _go(HisnDetail(sec: s));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذّر فتح أذكار النوم')),
-      );
-    }
+      await rescheduleAll(force: true);
+    } catch (_) {}
   }
 
-  void _openNow() {
-    final h = DateTime.now().hour;
-    if (h < 12) {
-      _go(const DailyAdhkarScreen(morning: true));
-    } else if (h < 22) {
-      _go(const DailyAdhkarScreen(morning: false));
-    } else {
-      _openSleep();
-    }
-  }
-
-  List<Shortcut> _shortcuts() {
+  List<RfSvc> _services() {
     return [
-      Shortcut('متابعة الصلوات', Icons.fact_check, const Color(0xFFDCEBE3),
+      RfSvc('متابعة الصلوات', Icons.fact_check,
           () => _go(const PrayerTrackerScreen())),
-      Shortcut('رمضان', Icons.nightlight_round, const Color(0xFFDDDCEB),
-          () => _go(const RamadanScreen())),
-      Shortcut('زكاة المال', Icons.calculate, const Color(0xFFEBE6DC),
-          () => _go(const ZakatScreen())),
-      Shortcut('التقويم الهجري', Icons.calendar_month, const Color(0xFFE0EBDC),
+      RfSvc('رمضان', Icons.nightlight_round, () => _go(const RamadanScreen())),
+      RfSvc('زكاة المال', Icons.calculate, () => _go(const ZakatScreen())),
+      RfSvc('التقويم الهجري', Icons.calendar_month,
           () => _go(const HijriCalendarScreen())),
-      Shortcut('شجرة التزامك', Icons.park, const Color(0xFFDCEBE3),
-          () => _go(const GrowthScreen())),
-      Shortcut('الختمة', Icons.auto_awesome, const Color(0xFFEBE6DC),
-          () => _go(const KhatmaScreen())),
-      Shortcut('الإعدادات', Icons.settings, const Color(0xFFE0E6EB), () async {
+      RfSvc('الختمة', Icons.auto_awesome, () => _go(const KhatmaScreen())),
+      RfSvc('الإحصائيات', Icons.insights, () => _go(const StatsScreen())),
+      RfSvc('شجرة التزامك', Icons.park, () => _go(const GrowthScreen())),
+      RfSvc('المسبحة', Icons.touch_app, () => _go(const TasbihScreen())),
+      RfSvc('أذكار الصباح', Icons.wb_sunny,
+          () => _go(const DailyAdhkarScreen(morning: true))),
+      RfSvc('أذكار المساء', Icons.nights_stay,
+          () => _go(const DailyAdhkarScreen(morning: false))),
+      RfSvc('حصن المسلم', Icons.favorite, () => _go(const HisnScreen())),
+      RfSvc('الرقية الشرعية', Icons.healing, () => _go(const RuqyahScreen())),
+      RfSvc('الأربعون النووية', Icons.menu_book,
+          () => _go(const NawawiScreen())),
+      RfSvc('الحج والعمرة', Icons.mosque, () => _go(const HajjScreen())),
+      RfSvc('المصحف', Icons.auto_stories,
+          () => _go(MushafReader(startPage: lastPage ?? 1))),
+      RfSvc('الإعدادات', Icons.settings, () async {
         await _go(const SettingsScreen());
         _loadPrayer();
       }),
-      Shortcut('الإحصائيات', Icons.insights, const Color(0xFFDCEBE3),
-          () => _go(const StatsScreen())),
-      Shortcut('أذكار المساء', Icons.nights_stay, const Color(0xFFDDDCEB),
-          () => _go(const DailyAdhkarScreen(morning: false))),
-      Shortcut('أذكار الصباح', Icons.wb_sunny, const Color(0xFFF1DDD8),
-          () => _go(const DailyAdhkarScreen(morning: true))),
-      Shortcut('المسبحة', Icons.touch_app, const Color(0xFFE8E8DC),
-          () => _go(const TasbihScreen())),
-      Shortcut(
-        'اتجاه القبلة',
-        Icons.explore,
-        const Color(0xFFEBDDEB),
-        () => _go(
-          Scaffold(
-            appBar: AppBar(title: const Text('اتجاه القبلة')),
-            body: const QiblaScreen(),
-          ),
-        ),
-      ),
-      Shortcut('الرقية الشرعية', Icons.healing, const Color(0xFFE6DCEB),
-          () => _go(const RuqyahScreen())),
-      Shortcut('حصن المسلم', Icons.favorite, const Color(0xFFDCEBE3),
-          () => _go(const HisnScreen())),
-      Shortcut('الأربعون النووية', Icons.menu_book, const Color(0xFFE3EBDC),
-          () => _go(const NawawiScreen())),
-      Shortcut('الحج والعمرة', Icons.mosque, const Color(0xFFDCE6EB),
-          () => _go(const HajjScreen())),
-      Shortcut('المصحف', Icons.auto_stories, const Color(0xFFEBE6DC),
-          () => _go(MushafReader(startPage: lastPage ?? 1))),
     ];
   }
 
@@ -280,14 +254,7 @@ class _HomeTabState extends State<HomeTab> {
     final d = data;
     final n = next;
     if (d != null && n != null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: ValueListenableBuilder<Duration>(
-          valueListenable: leftN,
-          builder: (context, left, _) =>
-              PrayerGrid(times: d.times, next: n, left: left),
-        ),
-      );
+      return RfPrayerGrid(times: d.times, next: n, left: leftN);
     }
     if (error != null) {
       return Card(
@@ -323,40 +290,61 @@ class _HomeTabState extends State<HomeTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          SkyHero(
+          RfHomeHero(
             data: data,
             next: next,
             left: leftN,
             active: widget.active,
+            bellDot: notifOff,
             onSearch: () => _go(const SearchScreen()),
             onBell: () => _go(const NotificationsScreen()),
             onTheme: ThemeController.toggle,
-            onAdhkar: _openNow,
+            onSettings: () async {
+              await _go(const SettingsScreen());
+              _loadPrayer();
+            },
           ),
           RamadanHomeCard(
             active: widget.active,
             tick: tick,
             onTap: () => _go(const RamadanScreen()),
           ),
-          OccasionCard(active: widget.active),
-          SectionTitle(
+          RfDateRow(
+            place: place,
+            onPlace: _pickCity,
+            onDate: () => _go(const HijriCalendarScreen()),
+          ),
+          RfOccasionBanner(active: widget.active),
+          RfSection(
             'أوقات الصلاة',
+            icon: Icons.mosque,
             trailing: Row(
+              mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.location_on_outlined, size: 18),
+                Icon(Icons.location_on_outlined, size: 16),
                 SizedBox(width: 4),
-                Text('حسب موقعك'),
+                Text('حسب موقعك', style: TextStyle(fontSize: 12)),
               ],
             ),
           ),
           _prayers(),
+          RfShortcuts4(
+            onTab: (i) {
+              final f = widget.onSwitchTab;
+              if (f != null) f(i);
+            },
+          ),
+          RfQuranBanner(
+            page: lastPage,
+            onTap: () => _go(MushafReader(startPage: lastPage ?? 1)),
+          ),
           PrayerDotsCard(
             active: widget.active,
             tick: tick,
             onTap: () => _go(const PrayerTrackerScreen()),
           ),
-          const SectionTitle('تطبيقاتك اليومية'),
-          ShortcutRow(items: _shortcuts()),
+          const RfSection('خدماتك', icon: Icons.apps),
+          RfServiceGrid(items: _services()),
           const SizedBox(height: 8),
           ContinueCard(
             page: lastPage,
