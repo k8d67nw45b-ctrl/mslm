@@ -10,6 +10,8 @@ import 'location_service.dart';
 import 'notification_service.dart';
 import 'notifications_screen.dart';
 import 'privacy_screen.dart';
+import 'rf_design.dart';
+import 'rf_page.dart';
 
 const _credits = 'صفحات المصحف: مصحف المدينة (خط مجمع الملك فهد V4) '
     'عبر SakinaDevGroup/mushaf-madani-cdn.\n'
@@ -88,17 +90,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _resched();
   }
 
-  Widget _title(String t) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-      child: Text(
-        t,
-        style: const TextStyle(
-          color: kGreen,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+  Widget _group(List<Widget> children) {
+    return RfCard(
+      padding: EdgeInsets.zero,
+      child: Column(children: children),
     );
   }
 
@@ -140,6 +135,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _themeTile(String label, IconData icon, bool selected, bool wantDark) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          if (dark != wantDark) ThemeController.toggle();
+        },
+        child: Container(
+          margin: const EdgeInsets.all(6),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: selected ? kGreen : kGreen.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: selected ? Colors.white : kGreen, size: 28),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(color: selected ? Colors.white : null),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -229,241 +254,228 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     if (!loaded) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('الإعدادات')),
-        body: const Center(child: CircularProgressIndicator()),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final d = calcParamsFor(method, madhab);
     final fDef = d.fajrAngle;
     final raw = d.ishaAngle;
     final iDef = (raw == null || raw <= 0) ? 17.0 : raw;
     return Scaffold(
-      appBar: AppBar(title: const Text('الإعدادات')),
       body: ListView(
-        padding: const EdgeInsets.all(kPaddingMedium),
+        padding: const EdgeInsets.only(bottom: 28),
         children: [
-          _title('المواقيت'),
-          Card(
-            color: kCardBackground,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.location_on, color: kGreen),
-                  title: const Text('الموقع'),
-                  subtitle: Text(place.isEmpty ? 'تلقائي (GPS)' : place),
-                  trailing: const Icon(Icons.chevron_left),
-                  onTap: _pickCity,
+          const RfPageHeader(
+            title: 'الإعدادات',
+            subtitle: 'خصّص التطبيق بما يناسبك',
+          ),
+          const RfSection('المظهر', icon: Icons.palette_outlined),
+          _group([
+            Padding(
+              padding: const EdgeInsets.all(6),
+              child: Row(
+                children: [
+                  _themeTile('نهاري', Icons.light_mode, !dark, false),
+                  _themeTile('ليلي', Icons.dark_mode, dark, true),
+                ],
+              ),
+            ),
+            SwitchListTile(
+              title: const Text('الأسود الحقيقي (AMOLED)'),
+              subtitle: const Text(
+                'يوفر البطارية بشاشات OLED (يعيدك للرئيسية)',
+              ),
+              value: kAmoled,
+              activeColor: kGreen,
+              onChanged: (v) => AppSettings.setAmoled(v),
+            ),
+            ListTile(
+              title: const Text('حجم الخط'),
+              subtitle: ValueListenableBuilder<double>(
+                valueListenable: AppSettings.fontScale,
+                builder: (context, s, _) => Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final e in const {
+                      'صغير': 0.9,
+                      'عادي': 1.0,
+                      'كبير': 1.15,
+                      'كبير جداً': 1.3,
+                    }.entries)
+                      ChoiceChip(
+                        label: Text(e.key),
+                        selected: (s - e.value).abs() < 0.01,
+                        onSelected: (_) => AppSettings.setFontScale(e.value),
+                      ),
+                  ],
                 ),
-                ListTile(
-                  title: const Text('طريقة حساب المواقيت'),
-                  subtitle: DropdownButton<String>(
-                    isExpanded: true,
-                    value: method,
-                    items: [
-                      for (final e in calcMethodNames.entries)
-                        DropdownMenuItem(value: e.key, child: Text(e.value)),
-                    ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => method = v);
+              ),
+            ),
+            ListTile(
+              title: const Text('ألوان المصحف'),
+              subtitle: ValueListenableBuilder<int>(
+                valueListenable: AppSettings.readTheme,
+                builder: (context, v, _) => Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final e in readThemeNames.entries)
+                      ChoiceChip(
+                        label: Text(e.value),
+                        selected: v == e.key,
+                        onSelected: (_) => AppSettings.setReadTheme(e.key),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ]),
+          const RfSection('المواقيت', icon: Icons.access_time),
+          _group([
+            ListTile(
+              leading: const Icon(Icons.location_on, color: kGreen),
+              title: const Text('الموقع'),
+              subtitle: Text(place.isEmpty ? 'تلقائي (GPS)' : place),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: _pickCity,
+            ),
+            ListTile(
+              title: const Text('طريقة حساب المواقيت'),
+              subtitle: DropdownButton<String>(
+                isExpanded: true,
+                value: method,
+                items: [
+                  for (final e in calcMethodNames.entries)
+                    DropdownMenuItem(value: e.key, child: Text(e.value)),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() => method = v);
+                  _saveCalc();
+                },
+              ),
+            ),
+            ListTile(
+              title: const Text('المذهب (وقت العصر)'),
+              subtitle: Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('الجمهور'),
+                    selected: madhab == 'shafi',
+                    onSelected: (_) {
+                      setState(() => madhab = 'shafi');
                       _saveCalc();
                     },
                   ),
-                ),
-                ListTile(
-                  title: const Text('المذهب (وقت العصر)'),
-                  subtitle: Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('الجمهور'),
-                        selected: madhab == 'shafi',
-                        onSelected: (_) {
-                          setState(() => madhab = 'shafi');
-                          _saveCalc();
-                        },
-                      ),
-                      ChoiceChip(
-                        label: const Text('حنفي'),
-                        selected: madhab == 'hanafi',
-                        onSelected: (_) {
-                          setState(() => madhab = 'hanafi');
-                          _saveCalc();
-                        },
-                      ),
-                    ],
+                  ChoiceChip(
+                    label: const Text('حنفي'),
+                    selected: madhab == 'hanafi',
+                    onSelected: (_) {
+                      setState(() => madhab = 'hanafi');
+                      _saveCalc();
+                    },
                   ),
-                ),
-                _angleRow('زاوية الفجر', fa, fDef, (v) {
-                  setState(() => fa = v);
-                  _saveAngle('angle_fajr', v);
-                }),
-                _angleRow('زاوية العشاء', ia, iDef, (v) {
-                  setState(() => ia = v);
-                  _saveAngle('angle_isha', v);
-                }),
-                ListTile(
-                  title: const Text('تعديل التاريخ الهجري'),
-                  trailing: ValueListenableBuilder<int>(
-                    valueListenable: AppSettings.hijriOffset,
-                    builder: (context, v, _) => Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          onPressed: v <= -2
-                              ? null
-                              : () => AppSettings.setHijriOffset(v - 1),
-                        ),
-                        Text(v == 0 ? 'بدون' : (v > 0 ? '+$v' : '$v')),
-                        IconButton(
-                          icon: const Icon(Icons.add_circle_outline),
-                          onPressed: v >= 2
-                              ? null
-                              : () => AppSettings.setHijriOffset(v + 1),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+            _angleRow('زاوية الفجر', fa, fDef, (v) {
+              setState(() => fa = v);
+              _saveAngle('angle_fajr', v);
+            }),
+            _angleRow('زاوية العشاء', ia, iDef, (v) {
+              setState(() => ia = v);
+              _saveAngle('angle_isha', v);
+            }),
+            ListTile(
+              title: const Text('تعديل التاريخ الهجري'),
+              trailing: ValueListenableBuilder<int>(
+                valueListenable: AppSettings.hijriOffset,
+                builder: (context, v, _) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: v <= -2
+                          ? null
+                          : () => AppSettings.setHijriOffset(v - 1),
+                    ),
+                    Text(v == 0 ? 'بدون' : (v > 0 ? '+$v' : '$v')),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: v >= 2
+                          ? null
+                          : () => AppSettings.setHijriOffset(v + 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ]),
           const Padding(
-            padding: EdgeInsets.all(8),
+            padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
             child: Text(
               'إذا اختلفت المواقيت عن مسجد منطقتك، جرّب طريقة ثانية أو عدّل '
               'الزوايا، وقارن بمواقيت الجهة الرسمية عندك.',
               style: TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ),
-          _title('التنبيهات'),
-          Card(
-            color: kCardBackground,
-            child: ListTile(
+          const RfSection('التنبيهات', icon: Icons.notifications_outlined),
+          _group([
+            ListTile(
               leading: const Icon(Icons.notifications, color: kGreen),
-              title: const Text('إشعارات الصلاة والأذكار'),
+              title: const Text('الأذان والأذكار والمناسبات'),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const NotificationsScreen()),
               ),
             ),
-          ),
-          _title('المظهر'),
-          Card(
-            color: kCardBackground,
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('الأسود الحقيقي (AMOLED)'),
-                  subtitle: const Text(
-                    'يوفر البطارية بشاشات OLED (يعيدك للرئيسية)',
-                  ),
-                  value: kAmoled,
-                  activeColor: kGreen,
-                  onChanged: (v) => AppSettings.setAmoled(v),
-                ),
-                ListTile(
-                  title: const Text('ألوان المصحف'),
-                  subtitle: ValueListenableBuilder<int>(
-                    valueListenable: AppSettings.readTheme,
-                    builder: (context, v, _) => Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final e in readThemeNames.entries)
-                          ChoiceChip(
-                            label: Text(e.value),
-                            selected: v == e.key,
-                            onSelected: (_) =>
-                                AppSettings.setReadTheme(e.key),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                ListTile(
-                  title: const Text('حجم الخط'),
-                  subtitle: ValueListenableBuilder<double>(
-                    valueListenable: AppSettings.fontScale,
-                    builder: (context, s, _) => Wrap(
-                      spacing: 8,
-                      children: [
-                        for (final e in const {
-                          'صغير': 0.9,
-                          'عادي': 1.0,
-                          'كبير': 1.15,
-                          'كبير جداً': 1.3,
-                        }.entries)
-                          ChoiceChip(
-                            label: Text(e.key),
-                            selected: (s - e.value).abs() < 0.01,
-                            onSelected: (_) =>
-                                AppSettings.setFontScale(e.value),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+          ]),
+          const RfSection('النسخ الاحتياطي', icon: Icons.backup_outlined),
+          _group([
+            ListTile(
+              leading: const Icon(Icons.upload_file, color: kGreen),
+              title: const Text('تصدير نسخة احتياطية'),
+              subtitle: const Text('إحصائياتك وختمتك ونقاط الحفظ وإعداداتك'),
+              onTap: _export,
             ),
-          ),
-          _title('النسخ الاحتياطي'),
-          Card(
-            color: kCardBackground,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.upload_file, color: kGreen),
-                  title: const Text('تصدير نسخة احتياطية'),
-                  subtitle: const Text(
-                    'إحصائياتك وختمتك ونقاط الحفظ وإعداداتك',
-                  ),
-                  onTap: _export,
-                ),
-                ListTile(
-                  leading: const Icon(Icons.copy, color: kGreen),
-                  title: const Text('نسخ النسخة الاحتياطية للحافظة'),
-                  onTap: _copyBackup,
-                ),
-                ListTile(
-                  leading: const Icon(Icons.download, color: kGreen),
-                  title: const Text('استيراد نسخة احتياطية'),
-                  subtitle: const Text('الصق محتوى النسخة'),
-                  onTap: _import,
-                ),
-              ],
+            ListTile(
+              leading: const Icon(Icons.copy, color: kGreen),
+              title: const Text('نسخ النسخة الاحتياطية للحافظة'),
+              onTap: _copyBackup,
             ),
-          ),
-          _title('عن التطبيق'),
-          Card(
-            color: kCardBackground,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.privacy_tip_outlined, color: kGreen),
-                  title: const Text('سياسة الخصوصية'),
-                  trailing: const Icon(Icons.chevron_left),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PrivacyScreen()),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.info_outline, color: kGreen),
-                  title: const Text(appName),
-                  subtitle: const Text('الإصدار 1.1.0 • المصادر والشكر'),
-                  onTap: () => showAboutDialog(
-                    context: context,
-                    applicationName: appName,
-                    applicationVersion: '1.1.0',
-                    children: const [Text(_credits)],
-                  ),
-                ),
-              ],
+            ListTile(
+              leading: const Icon(Icons.download, color: kGreen),
+              title: const Text('استيراد نسخة احتياطية'),
+              subtitle: const Text('الصق محتوى النسخة'),
+              onTap: _import,
             ),
-          ),
+          ]),
+          const RfSection('عن التطبيق', icon: Icons.info_outline),
+          _group([
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined, color: kGreen),
+              title: const Text('سياسة الخصوصية'),
+              trailing: const Icon(Icons.chevron_left),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PrivacyScreen()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline, color: kGreen),
+              title: const Text(appName),
+              subtitle: const Text('الإصدار 1.1.0 • المصادر والشكر'),
+              onTap: () => showAboutDialog(
+                context: context,
+                applicationName: appName,
+                applicationVersion: '1.1.0',
+                children: const [Text(_credits)],
+              ),
+            ),
+          ]),
         ],
       ),
     );
