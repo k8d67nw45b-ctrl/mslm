@@ -3,6 +3,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
 import 'notification_service.dart';
+import 'rf_design.dart';
+import 'rf_page.dart';
 
 const _pn = ['الفجر', 'الظهر', 'العصر', 'المغرب', 'العشاء'];
 
@@ -143,6 +145,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _save();
   }
 
+  IconData _iconFor(String t) {
+    if (t.contains('صلاة')) return Icons.mosque;
+    if (t.contains('أذكار')) return Icons.wb_sunny;
+    if (t.contains('ورد')) return Icons.menu_book;
+    if (t.contains('سحور') || t.contains('الإفطار') || t.contains('إفطار')) {
+      return Icons.nightlight_round;
+    }
+    if (t.contains('غداً')) return Icons.calendar_month;
+    return Icons.notifications;
+  }
+
   Widget _row(bool? ok, String title, String value, {Widget? action}) {
     final color =
         ok == null ? Colors.grey : (ok ? kGreen : Colors.redAccent);
@@ -160,130 +173,109 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _statusCard() {
     final s = st;
-    return Card(
-      color: kCardBackground,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    if (s == null) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return RfCard(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        children: [
+          _row(
+            s.enabled,
+            'إذن الإشعارات',
+            s.enabled == true ? 'مفعّل' : 'غير مفعّل',
+            action: s.enabled == true
+                ? null
+                : TextButton(
+                    onPressed: () async {
+                      await requestNotificationPermissions();
+                      _status();
+                    },
+                    child: const Text('طلب'),
+                  ),
+          ),
+          _row(
+            s.exact,
+            'التنبيه بالدقيقة',
+            s.exact == null
+                ? 'غير مطلوب بهذا الجهاز'
+                : (s.exact! ? 'مسموح' : 'غير مسموح (قد تتأخر)'),
+            action: s.exact == false
+                ? TextButton(
+                    onPressed: () async {
+                      await requestExactAlarms();
+                      _status();
+                    },
+                    child: const Text('منح'),
+                  )
+                : null,
+          ),
+          _row(s.pending > 0 ? true : null, 'تنبيهات مجدولة', '${s.pending}'),
+          if (s.error.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Text(
-                'حالة الإشعارات',
-                style: Theme.of(context).textTheme.titleLarge,
+              padding: const EdgeInsets.all(12),
+              child: SelectableText(
+                'آخر خطأ: ${s.error}',
+                style: const TextStyle(color: Colors.redAccent),
               ),
             ),
-            if (s == null)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: LinearProgressIndicator(),
-              )
-            else ...[
-              _row(
-                s.enabled,
-                'إذن الإشعارات',
-                s.enabled == true ? 'مفعّل' : 'غير مفعّل',
-                action: s.enabled == true
-                    ? null
-                    : TextButton(
-                        onPressed: () async {
-                          await requestNotificationPermissions();
-                          _status();
-                        },
-                        child: const Text('طلب'),
-                      ),
-              ),
-              _row(
-                s.exact,
-                'التنبيه بالدقيقة',
-                s.exact == null
-                    ? 'غير مطلوب بهذا الجهاز'
-                    : (s.exact! ? 'مسموح' : 'غير مسموح (قد تتأخر)'),
-                action: s.exact == false
-                    ? TextButton(
-                        onPressed: () async {
-                          await requestExactAlarms();
-                          _status();
-                        },
-                        child: const Text('منح'),
-                      )
-                    : null,
-              ),
-              _row(
-                s.pending > 0 ? true : null,
-                'تنبيهات مجدولة',
-                '${s.pending}',
-              ),
-              if (s.items.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                  child: Text(
-                    'القادمة:',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-              for (final it in s.items.take(8))
-                ListTile(
-                  dense: true,
-                  visualDensity: VisualDensity.compact,
-                  title: Text(it.title, style: const TextStyle(fontSize: 13)),
-                  trailing: Text(
-                    it.when,
-                    style: const TextStyle(fontSize: 12, color: kGreen),
-                  ),
-                ),
-              if (s.error.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: SelectableText(
-                    'آخر خطأ: ${s.error}',
-                    style: const TextStyle(color: Colors.redAccent),
-                  ),
-                ),
-            ],
-            if (note.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(note),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _test(kPrayer),
-                    icon: const Icon(Icons.notifications_active),
-                    label: const Text('تجربة عادية'),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _test(kAdhan),
-                    icon: const Icon(Icons.mosque),
-                    label: const Text('تجربة الأذان'),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => _test(kFajr),
-                    icon: const Icon(Icons.wb_twilight),
-                    label: const Text('تجربة أذان الفجر'),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: _testLater,
-                    icon: const Icon(Icons.timer),
-                    label: const Text('تجربة بعد دقيقة'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => Geolocator.openAppSettings(),
-                    icon: const Icon(Icons.settings),
-                    label: const Text('إعدادات التطبيق'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
+    );
+  }
+
+  Widget _feed() {
+    final s = st;
+    if (s == null) return const SizedBox.shrink();
+    if (s.items.isEmpty) {
+      return const RfCard(
+        child: Text(
+          'لا توجد تنبيهات مجدولة، فعّل أحد التنبيهات بالأسفل',
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final it in s.items.take(7))
+          RfCard(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            radius: 18,
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: rfDeep,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(_iconFor(it.title), color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    it.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Text(
+                  it.when,
+                  style: const TextStyle(color: kGreen, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -337,20 +329,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     if (!loaded) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('الإشعارات')),
-        body: const Center(child: CircularProgressIndicator()),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('الإشعارات')),
       body: ListView(
-        padding: const EdgeInsets.all(kPaddingMedium),
+        padding: const EdgeInsets.only(bottom: 28),
         children: [
+          const RfPageHeader(
+            title: 'الإشعارات والتنبيهات',
+            subtitle: 'تنبيهات تناسبك بوضوح وسهولة',
+          ),
+          const RfSection('التنبيهات القادمة', icon: Icons.notifications_active),
+          _feed(),
+          const RfSection('حالة الإشعارات', icon: Icons.verified_outlined),
           _statusCard(),
-          const SizedBox(height: kPaddingMedium),
-          Card(
-            color: kCardBackground,
+          const RfSection('الصلاة', icon: Icons.mosque),
+          RfCard(
+            padding: EdgeInsets.zero,
             child: Column(
               children: [
                 _sw('تنبيه عند دخول وقت الصلاة', prayers, (v) {
@@ -386,9 +383,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: kPaddingMedium),
-          Card(
-            color: kCardBackground,
+          const RfSection('الأذكار', icon: Icons.wb_twilight),
+          RfCard(
+            padding: EdgeInsets.zero,
             child: Column(
               children: [
                 _sw('تذكير أذكار الصباح (يومياً)', morning, (v) {
@@ -406,9 +403,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: kPaddingMedium),
-          Card(
-            color: kCardBackground,
+          const RfSection('رمضان', icon: Icons.nightlight_round),
+          RfCard(
+            padding: EdgeInsets.zero,
             child: Column(
               children: [
                 _sw(
@@ -462,11 +459,56 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: kPaddingMedium),
-          const Text(
-            'إذا تأخرت الإشعارات، اسمح للتطبيق بالعمل بالخلفية من '
-            'إعدادات البطارية (بدون قيود)، وفعّل التشغيل التلقائي إن وُجد.',
-            style: TextStyle(color: Colors.grey),
+          const RfSection('اختبار التنبيهات', icon: Icons.bug_report_outlined),
+          RfCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _test(kPrayer),
+                      icon: const Icon(Icons.notifications_active),
+                      label: const Text('تجربة عادية'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => _test(kAdhan),
+                      icon: const Icon(Icons.mosque),
+                      label: const Text('تجربة الأذان'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => _test(kFajr),
+                      icon: const Icon(Icons.wb_twilight),
+                      label: const Text('تجربة أذان الفجر'),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _testLater,
+                      icon: const Icon(Icons.timer),
+                      label: const Text('تجربة بعد دقيقة'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => Geolocator.openAppSettings(),
+                      icon: const Icon(Icons.settings),
+                      label: const Text('إعدادات التطبيق'),
+                    ),
+                  ],
+                ),
+                if (note.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(note),
+                ],
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'إذا تأخرت الإشعارات، اسمح للتطبيق بالعمل بالخلفية من '
+              'إعدادات البطارية (بدون قيود)، وفعّل التشغيل التلقائي إن وُجد.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
           ),
         ],
       ),
