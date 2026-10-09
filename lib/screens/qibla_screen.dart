@@ -3,12 +3,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../core/constants.dart';
+import '../core/theme_controller.dart';
 import 'location_service.dart';
+import 'rf_design.dart';
+import 'rf_page.dart';
 
 const _kaabaLat = 21.4225;
 const _kaabaLon = 39.8262;
 
 double _rad(double d) => d * math.pi / 180;
+
+String _dirName(double b) {
+  const names = [
+    'شمال',
+    'شمال شرقي',
+    'شرق',
+    'جنوب شرقي',
+    'جنوب',
+    'جنوب غربي',
+    'غرب',
+    'شمال غربي',
+  ];
+  final i = ((b + 22.5) / 45).floor() % 8;
+  return names[i];
+}
 
 class _QiblaPainter extends CustomPainter {
   final double heading;
@@ -60,11 +78,16 @@ class _QiblaPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = math.min(size.width, size.height) / 2 - 6;
-    final ring = aligned ? kGreen : Colors.grey;
+    final ring = aligned ? kGreen : const Color(0xFF9AA5A0);
     canvas.drawCircle(
       c,
       r,
-      Paint()..color = dark ? const Color(0xFF11161C) : Colors.white,
+      Paint()
+        ..shader = RadialGradient(
+          colors: dark
+              ? const [Color(0xFF1A242B), Color(0xFF0F161B)]
+              : const [Color(0xFFFFFFFF), Color(0xFFE9EFEC)],
+        ).createShader(Rect.fromCircle(center: c, radius: r)),
     );
     canvas.drawCircle(
       c,
@@ -228,17 +251,157 @@ class _QiblaScreenState extends State<QiblaScreen> {
     HapticFeedback.heavyImpact();
   }
 
+  void _calibrate() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('معايرة البوصلة'),
+        content: const Text(
+          'أمسك الجوال وحرّكه ببطء في الهواء على شكل رقم 8 عدة مرات، '
+          'وابعده عن المعادن والمغناطيس والأجهزة الكهربائية، ثم راقب '
+          'الاتجاه من جديد.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compass() {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return StreamBuilder<CompassEvent>(
+      stream: FlutterCompass.events,
+      builder: (context, snap) {
+        final raw = snap.data?.heading;
+        if (raw == null) {
+          return const RfCard(
+            child: Text(
+              'البوصلة غير متوفرة بهذا الجهاز',
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+        final heading = _filter((raw + 360) % 360);
+        final bearing = qiblaBearing!;
+        final diff = ((bearing - heading + 540) % 360) - 180;
+        final aligned = diff.abs() < 4;
+        if (aligned && !_aligned) _buzz();
+        _aligned = aligned;
+        return Column(
+          children: [
+            RfCard(
+              child: Column(
+                children: [
+                  TextButton.icon(
+                    onPressed: _pick,
+                    icon: const Icon(Icons.location_on, color: kGreen),
+                    label: Text(
+                      '${place.isEmpty ? 'تحديد الموقع' : place} (تغيير)',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: 300,
+                    height: 300,
+                    child: CustomPaint(
+                      painter: _QiblaPainter(heading, bearing, aligned, dark),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    aligned
+                        ? 'أنت باتجاه القبلة ✓'
+                        : 'استدر حتى تصير الكعبة عند المؤشر',
+                    style: TextStyle(
+                      color: aligned ? kGreen : null,
+                      fontWeight:
+                          aligned ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${bearing.round()}°',
+                    style: const TextStyle(
+                      fontSize: 46,
+                      fontWeight: FontWeight.bold,
+                      color: kGreen,
+                    ),
+                  ),
+                  Text(
+                    '(${_dirName(bearing)})',
+                    style: const TextStyle(color: Colors.grey, fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+            RfCard(
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.straighten, color: kGreen),
+                      const SizedBox(width: 10),
+                      const Text('المسافة إلى الكعبة'),
+                      const Spacer(),
+                      Text(
+                        '${distance.round()} كم',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _calibrate,
+                      icon: const Icon(Icons.explore),
+                      label: const Text('معايرة البوصلة'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: rfDeep,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'يرجى معايرة البوصلة للحصول على أدق النتائج، وإبعاد '
+                    'الجوال عن المعادن والمغناطيس.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final children = <Widget>[
+      RfPageHeader(
+        title: 'اتجاه القبلة',
+        subtitle: 'نحو الكعبة المشرفة',
+        trailing: IconButton(
+          icon: const Icon(Icons.brightness_6, color: Colors.white),
+          onPressed: ThemeController.toggle,
+        ),
+      ),
+    ];
     if (error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(kPaddingLarge),
+      children.add(
+        RfCard(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(error!, textAlign: TextAlign.center),
-              const SizedBox(height: kPaddingMedium),
+              const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _pick,
                 child: const Text('اختيار المدينة'),
@@ -251,101 +414,19 @@ class _QiblaScreenState extends State<QiblaScreen> {
           ),
         ),
       );
+    } else if (qiblaBearing == null) {
+      children.add(
+        const Padding(
+          padding: EdgeInsets.all(40),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    } else {
+      children.add(_compass());
     }
-    if (qiblaBearing == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return _compass();
-  }
-
-  Widget _compass() {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return StreamBuilder<CompassEvent>(
-      stream: FlutterCompass.events,
-      builder: (context, snap) {
-        final raw = snap.data?.heading;
-        if (raw == null) {
-          return const Center(
-            child: Text('البوصلة غير متوفرة بهذا الجهاز'),
-          );
-        }
-        final heading = _filter((raw + 360) % 360);
-        final diff = ((qiblaBearing! - heading + 540) % 360) - 180;
-        final aligned = diff.abs() < 4;
-        if (aligned && !_aligned) _buzz();
-        _aligned = aligned;
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                color: aligned
-                    ? kGreen.withOpacity(0.25)
-                    : Colors.transparent,
-              ),
-            ),
-            Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'اتجاه القبلة',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    TextButton.icon(
-                      onPressed: _pick,
-                      icon: const Icon(Icons.location_on, color: kGreen),
-                      label: Text('الموقع: $place (تغيير)'),
-                    ),
-                    const SizedBox(height: kPaddingSmall),
-                    SizedBox(
-                      width: 300,
-                      height: 300,
-                      child: CustomPaint(
-                        painter: _QiblaPainter(
-                          heading,
-                          qiblaBearing!,
-                          aligned,
-                          dark,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: kPaddingMedium),
-                    Text(
-                      aligned
-                          ? 'أنت باتجاه القبلة ✓'
-                          : 'استدر حتى تصير الكعبة عند المؤشر',
-                      style: TextStyle(
-                        color: aligned ? kGreen : null,
-                        fontWeight:
-                            aligned ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const SizedBox(height: kPaddingSmall),
-                    Text(
-                      'زاوية القبلة: ${qiblaBearing!.toStringAsFixed(1)}°',
-                      style: const TextStyle(color: kGreen, fontSize: 16),
-                    ),
-                    Text('المسافة إلى الكعبة: ${distance.round()} كم'),
-                    const SizedBox(height: kPaddingSmall),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'ابعد الجوال عن المعادن والمغناطيس، وحرّكه بشكل 8 '
-                        'للمعايرة',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 28),
+      children: children,
     );
   }
 }
