@@ -35,15 +35,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final dark = ThemeController.mode.value == ThemeMode.dark;
+    final showBar = _selectedIndex == 1 || _selectedIndex == 4;
     return PopScope(
       canPop: _selectedIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) setState(() => _selectedIndex = 0);
       },
       child: Scaffold(
-        appBar: _selectedIndex == 0
-            ? null
-            : AppBar(
+        appBar: showBar
+            ? AppBar(
                 title: Text(_titles[_selectedIndex]),
                 actions: [
                   IconButton(
@@ -51,13 +51,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPressed: ThemeController.toggle,
                   ),
                 ],
-              ),
+              )
+            : null,
         body: Stack(
           fit: StackFit.expand,
           children: [
             Offstage(
               offstage: _selectedIndex != 0,
-              child: HomeTab(active: _selectedIndex == 0),
+              child: HomeTab(
+                active: _selectedIndex == 0,
+                onSwitchTab: (i) => setState(() => _selectedIndex = i),
+              ),
             ),
             if (_selectedIndex != 0)
               KeyedSubtree(
@@ -66,38 +70,61 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _selectedIndex,
-          backgroundColor: kCardBackground,
-          indicatorColor: kGreen.withOpacity(0.25),
-          onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'الرئيسية',
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: kCardBackground,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.menu_book_outlined),
-              selectedIcon: Icon(Icons.menu_book),
-              label: 'القرآن',
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1F000000),
+                blurRadius: 18,
+                offset: Offset(0, -4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.favorite_border),
-              selectedIcon: Icon(Icons.favorite),
-              label: 'الأذكار',
+            child: NavigationBar(
+              selectedIndex: _selectedIndex,
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              indicatorColor: kGreen.withOpacity(0.22),
+              onDestinationSelected: (i) =>
+                  setState(() => _selectedIndex = i),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: 'الرئيسية',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.menu_book_outlined),
+                  selectedIcon: Icon(Icons.menu_book),
+                  label: 'القرآن',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.favorite_border),
+                  selectedIcon: Icon(Icons.favorite),
+                  label: 'الأذكار',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.access_time),
+                  selectedIcon: Icon(Icons.access_time_filled),
+                  label: 'الصلاة',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.explore_outlined),
+                  selectedIcon: Icon(Icons.explore),
+                  label: 'القبلة',
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.access_time),
-              selectedIcon: Icon(Icons.access_time_filled),
-              label: 'الصلاة',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: 'القبلة',
-            ),
-          ],
+          ),
         ),
       ),
     );
