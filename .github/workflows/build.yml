@@ -406,6 +406,7 @@ jobs:
           for pat in ('app_icon.*', 'icon.*', 'IMG_*.*', '*.png', '*.jpg', '*.jpeg', '*.PNG', '*.JPG', '*.JPEG'):
               cands += sorted(glob.glob(pat))
           cands = [c for c in cands if c.lower().endswith(('.png', '.jpg', '.jpeg'))]
+          cands = [c for c in cands if not os.path.basename(c).lower().startswith('splash')]
           if not cands:
               print('no custom icon found, keeping generated icon')
               raise SystemExit(0)
@@ -445,6 +446,46 @@ jobs:
               out.resize((px, px), Image.Resampling.LANCZOS).save(folder + '/ic_launcher.png')
           out.resize((512, 512), Image.Resampling.LANCZOS).save('/tmp/icon.png')
           print('custom icon applied')
+          PY
+
+      - name: Native launch screen
+        run: |
+          python3 - <<'PY'
+          import os
+          R = 'android/app/src/main/res/'
+
+          def w(path, text):
+              full = R + path
+              os.makedirs(os.path.dirname(full), exist_ok=True)
+              open(full, 'w', encoding='utf-8').write(text)
+              print('wrote', full)
+
+          head = '<?xml version="1.0" encoding="utf-8"?>\n'
+          w('values/rf_colors.xml', head +
+            '<resources>\n    <color name="rf_splash_bg">#0A1B3D</color>\n</resources>\n')
+          layer = (head +
+                   '<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                   '    <item android:drawable="@color/rf_splash_bg" />\n'
+                   '</layer-list>\n')
+          w('drawable/launch_background.xml', layer)
+          w('drawable-v21/launch_background.xml', layer)
+          w('drawable/splash_empty.xml', head +
+            '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
+            '    android:width="24dp" android:height="24dp"\n'
+            '    android:viewportWidth="24" android:viewportHeight="24">\n'
+            '    <path android:fillColor="#00000000" android:pathData="M0,0h1v1h-1z" />\n'
+            '</vector>\n')
+
+          def style(parent):
+              return (head + '<resources>\n'
+                      '    <style name="LaunchTheme" parent="' + parent + '">\n'
+                      '        <item name="android:windowBackground">@drawable/launch_background</item>\n'
+                      '        <item name="android:windowSplashScreenBackground">@color/rf_splash_bg</item>\n'
+                      '        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_empty</item>\n'
+                      '    </style>\n</resources>\n')
+
+          w('values-v31/styles.xml', style('@android:style/Theme.Light.NoTitleBar'))
+          w('values-night-v31/styles.xml', style('@android:style/Theme.Black.NoTitleBar'))
           PY
 
       - name: Download fonts
