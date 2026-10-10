@@ -6,6 +6,7 @@ import '../core/theme_controller.dart';
 import 'daily_adhkar_screen.dart';
 import 'daily_content.dart';
 import 'growth_screen.dart';
+import 'hadith_books.dart';
 import 'hajj_screen.dart';
 import 'hijri_calendar_screen.dart';
 import 'hisn_screen.dart';
@@ -241,6 +242,8 @@ class _HomeTabState extends State<HomeTab> {
       RfSvc('الرقية الشرعية', Icons.healing, () => _go(const RuqyahScreen())),
       RfSvc('الأربعون النووية', Icons.menu_book,
           () => _go(const NawawiScreen())),
+      RfSvc('الكتب الستة', Icons.library_books,
+          () => _go(const HadithBooksScreen())),
       RfSvc('الحج والعمرة', Icons.mosque, () => _go(const HajjScreen())),
       RfSvc('المصحف', Icons.auto_stories,
           () => _go(MushafReader(startPage: lastPage ?? 1))),
