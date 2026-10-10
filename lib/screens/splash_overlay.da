@@ -1,0 +1,260 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+
+/// شاشة الدخول: خلفية كحلية + شعار رفيق المسلم، تظهر مرة وحدة عند فتح التطبيق.
+class SplashGate extends StatefulWidget {
+  final Widget child;
+  const SplashGate({super.key, required this.child});
+
+  static bool _shown = false;
+
+  @override
+  State<SplashGate> createState() => _SplashGateState();
+}
+
+class _SplashGateState extends State<SplashGate>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  bool _visible = !SplashGate._shown;
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900));
+    if (_visible) {
+      SplashGate._shown = true;
+      _c.forward();
+      _t = Timer(const Duration(milliseconds: 2200), () {
+        if (mounted) setState(() => _visible = false);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        IgnorePointer(
+          ignoring: !_visible,
+          child: AnimatedOpacity(
+            opacity: _visible ? 1 : 0,
+            duration: const Duration(milliseconds: 500),
+            child: _visible || _c.isAnimating
+                ? _SplashBody(anim: _c)
+                : const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SplashBody extends StatelessWidget {
+  final Animation<double> anim;
+  const _SplashBody({required this.anim});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF0A1B3D),
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0, -0.2),
+            radius: 1.1,
+            colors: [Color(0xFF12294F), Color(0xFF081633), Color(0xFF050F24)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: AnimatedBuilder(
+              animation: anim,
+              builder: (_, __) {
+                final t = Curves.easeOutCubic.transform(anim.value);
+                return Opacity(
+                  opacity: t,
+                  child: Transform.scale(
+                    scale: 0.88 + 0.12 * t,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 230,
+                          height: 230,
+                          child: CustomPaint(painter: _LogoPainter()),
+                        ),
+                        const SizedBox(height: 22),
+                        const Text(
+                          'رفيق المسلم',
+                          style: TextStyle(
+                            color: Color(0xFFE8C766),
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'معك في كل لحظة',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.65),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogoPainter extends CustomPainter {
+  static const _gold = Color(0xFFD9AE4F);
+  static const _goldLight = Color(0xFFF1D58B);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // الرسم مبني على مساحة 1242 × 1242 ثم يتصغر.
+    final k = size.width / 1242.0;
+    canvas.scale(k, k);
+
+    final goldShader = const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [_goldLight, _gold, Color(0xFFB98A33)],
+    ).createShader(const Rect.fromLTWH(0, 0, 1242, 1242));
+
+    final goldStroke = Paint()
+      ..shader = goldShader
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 26
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final goldFill = Paint()..shader = goldShader;
+    final white = Paint()..color = const Color(0xFFF6F2EA);
+    final shade = Paint()..color = const Color(0xFFE2DCCF);
+
+    // القوس الذهبي (نصفه ثم المرآة)
+    Path half(bool mirror) {
+      double x(double v) => mirror ? 1240 - v : v;
+      final p = Path()..moveTo(620, 95);
+      p.cubicTo(x(500), 240, x(250), 330, x(235), 560);
+      p.cubicTo(x(230), 640, x(180), 700, x(190), 790);
+      p.cubicTo(x(200), 835, x(260), 850, x(305), 855);
+      return p;
+    }
+
+    final arch = Path()..addPath(half(false), Offset.zero);
+    final rightHalf = half(true);
+    arch.addPath(rightHalf, Offset.zero);
+    canvas.drawPath(arch, goldStroke);
+
+    // الهلال
+    final moon = Path()
+      ..moveTo(628, 345)
+      ..cubicTo(590, 350, 590, 400, 625, 415)
+      ..cubicTo(600, 395, 605, 365, 628, 345)
+      ..close();
+    canvas.drawPath(moon, goldFill);
+    canvas.drawCircle(const Offset(624, 440), 9, goldFill);
+
+    // القبة الكبيرة
+    final dome = Path()
+      ..moveTo(487, 695)
+      ..cubicTo(487, 590, 560, 540, 620, 478)
+      ..cubicTo(680, 540, 757, 590, 757, 695)
+      ..close();
+    canvas.drawPath(dome, white);
+    canvas.drawCircle(const Offset(622, 468), 14, goldFill);
+
+    // جسم المسجد
+    canvas.drawRect(const Rect.fromLTWH(490, 712, 262, 232), white);
+    canvas.drawRect(const Rect.fromLTWH(482, 694, 276, 18), goldFill);
+    final door = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFF1D58B), Color(0xFFC48A2C)],
+      ).createShader(const Rect.fromLTWH(500, 760, 240, 190));
+    void arc(double cx, double top, double w, double bottom) {
+      final p = Path()
+        ..moveTo(cx - w / 2, bottom)
+        ..lineTo(cx - w / 2, top + w * 0.7)
+        ..quadraticBezierTo(cx - w / 2, top + w * 0.2, cx, top)
+        ..quadraticBezierTo(cx + w / 2, top + w * 0.2, cx + w / 2, top + w * 0.7)
+        ..lineTo(cx + w / 2, bottom)
+        ..close();
+      canvas.drawPath(p, door);
+    }
+
+    arc(538, 800, 46, 944);
+    arc(620, 768, 66, 944);
+    arc(702, 800, 46, 944);
+
+    // المئذنتان
+    void minaret(double cx) {
+      canvas.drawRect(Rect.fromLTWH(cx - 52, 712, 104, 190), white);
+      canvas.drawRect(Rect.fromLTWH(cx - 56, 706, 112, 14), shade);
+      final d = Path()
+        ..moveTo(cx - 50, 706)
+        ..cubicTo(cx - 52, 650, cx - 20, 625, cx, 600)
+        ..cubicTo(cx + 20, 625, cx + 52, 650, cx + 50, 706)
+        ..close();
+      canvas.drawPath(d, white);
+      canvas.drawLine(Offset(cx, 600), Offset(cx, 556),
+          Paint()..color = _gold..strokeWidth = 5);
+      canvas.drawCircle(Offset(cx, 606), 8, goldFill);
+      for (final dx in [-26.0, 0.0, 26.0]) {
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(cx + dx - 6, 750, 12, 28), const Radius.circular(6)),
+            door);
+      }
+      arc(cx, 792, 28, 852);
+    }
+
+    minaret(413);
+    minaret(828);
+
+    // الكتاب المفتوح
+    final left = Path()
+      ..moveTo(175, 900)
+      ..cubicTo(300, 880, 420, 880, 520, 930)
+      ..lineTo(620, 1060)
+      ..cubicTo(480, 1010, 300, 960, 175, 900)
+      ..close();
+    final right = Path()
+      ..moveTo(1065, 900)
+      ..cubicTo(940, 880, 820, 880, 720, 930)
+      ..lineTo(620, 1060)
+      ..cubicTo(760, 1010, 940, 960, 1065, 900)
+      ..close();
+    canvas.drawPath(left, goldFill);
+    canvas.drawPath(right, goldFill);
+    final lower = Path()
+      ..moveTo(190, 912)
+      ..cubicTo(330, 1010, 520, 1060, 620, 1140)
+      ..cubicTo(720, 1060, 910, 1010, 1050, 912);
+    canvas.drawPath(lower, goldStroke..strokeWidth = 20);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
