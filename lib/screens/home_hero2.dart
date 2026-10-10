@@ -111,8 +111,8 @@ class _RfHomeHeroState extends State<RfHomeHero> {
       customBorder: const CircleBorder(),
       onTap: f,
       child: Container(
-        width: 38,
-        height: 38,
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.white.withOpacity(0.14),
@@ -121,11 +121,11 @@ class _RfHomeHeroState extends State<RfHomeHero> {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 20),
+            Icon(icon, color: Colors.white, size: 18),
             if (dot)
               Positioned(
-                top: 7,
-                right: 8,
+                top: 6,
+                right: 7,
                 child: Container(
                   width: 8,
                   height: 8,
@@ -349,43 +349,51 @@ class _RfHomeHeroState extends State<RfHomeHero> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.mosque, color: rfGold, size: 30),
+                    const Icon(Icons.mosque, color: rfGold, size: 28),
                     const SizedBox(width: 8),
-                    Flexible(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: const [
-                          Text(
-                            appName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 21,
-                              fontWeight: FontWeight.bold,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              appName,
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 21,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          Text(
-                            'معك في كل لحظة',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              'معك في كل لحظة',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const Spacer(),
-                    _ib(Icons.search, widget.onSearch),
                     const SizedBox(width: 6),
+                    _ib(Icons.search, widget.onSearch),
+                    const SizedBox(width: 5),
                     _ib(
                       Icons.notifications_none,
                       widget.onBell,
                       dot: widget.bellDot,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 5),
                     _ib(Icons.brightness_6, widget.onTheme),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 5),
                     _ib(Icons.settings_outlined, widget.onSettings),
                   ],
                 ),
