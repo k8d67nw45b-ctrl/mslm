@@ -1,3 +1,4 @@
+import 'splash_overlay.dart';
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import 'home_tab.dart';
@@ -31,7 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
+    return SplashGate(
+  child: PopScope(
       canPop: _selectedIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) setState(() => _selectedIndex = 0);
@@ -111,6 +113,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-    );
+      ));
   }
 }
