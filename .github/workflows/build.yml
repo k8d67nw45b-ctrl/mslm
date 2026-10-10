@@ -161,6 +161,37 @@ jobs:
           python3 -c "import json; d=json.load(open('assets/data/hisn_almuslim.json', encoding='utf-8')); print('hisn', len(d))"
           python3 -c "import json; d=json.load(open('assets/data/nawawi.json', encoding='utf-8')); print('nawawi', len(d['hadiths']))"
 
+      - name: Download six hadith books
+        run: |
+          mkdir -p assets/data
+          for b in bukhari muslim abudawud tirmidhi nasai ibnmajah; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /tmp/raw_$b.json https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-$b.json
+          done
+          python3 - <<'PY'
+          import json
+          books = ['bukhari', 'muslim', 'abudawud', 'tirmidhi', 'nasai', 'ibnmajah']
+          for b in books:
+              d = json.load(open('/tmp/raw_%s.json' % b, encoding='utf-8'))
+              out = []
+              for h in d['hadiths']:
+                  text = (h.get('text') or '').strip()
+                  if not text:
+                      continue
+                  gr = ''
+                  by = ''
+                  g = h.get('grades') or []
+                  if g and isinstance(g[0], dict):
+                      gr = str(g[0].get('grade', ''))
+                      by = str(g[0].get('name', ''))
+                  out.append([h.get('hadithnumber'), text, gr, by])
+              assert len(out) > 1000, b
+              with open('assets/data/hadith_%s.json' % b, 'w', encoding='utf-8') as f:
+                  json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
+              print(b, len(out), 'hadiths')
+          PY
+          ls -l assets/data/hadith_*.json
+          du -ch assets/data/hadith_*.json | tail -1
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
