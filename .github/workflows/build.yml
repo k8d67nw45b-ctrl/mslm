@@ -10,7 +10,7 @@ on:
         default: 'android-arm64'
       target_mb:
         description: 'Quran pages target size in MB'
-        default: '38'
+        default: '20'
 
 permissions:
   contents: write
@@ -48,12 +48,12 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v5-${{ github.event.inputs.target_mb || '38' }}
+          key: quran-assets-v6-${{ github.event.inputs.target_mb || '20' }}
 
       - name: Download Quran assets
         if: steps.qcache.outputs.cache-hit != 'true'
         env:
-          TARGET_MB: ${{ github.event.inputs.target_mb || '38' }}
+          TARGET_MB: ${{ github.event.inputs.target_mb || '20' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y webp imagemagick
@@ -93,10 +93,10 @@ jobs:
           file /tmp/orig/p1.png /tmp/orig/p300.png
           cat > /tmp/cal.sh <<'SH'
           #!/bin/bash
-          SAMPLES="1 2 50 100 150 200 250 300 350 400 450 500 550 600"
-          N=14
+          SAMPLES="30 80 130 180 230 280 330 380 430 480 530 580"
+          N=12
           CHOSEN=""
-          for CFG in 100:85 100:75 100:65 90:80 90:70 80:80 80:70 75:75 75:65 70:70 70:60 65:60 60:60; do
+          for CFG in 100:85 100:75 100:65 90:80 90:70 80:80 80:70 75:75 75:65 70:70 70:60 65:60 60:60 60:50 55:55; do
             S=${CFG%%:*}
             Q=${CFG##*:}
             TOTAL=0
@@ -141,7 +141,7 @@ jobs:
           path: |
             assets/mushaf
             assets/data
-          key: quran-assets-v5-${{ github.event.inputs.target_mb || '38' }}
+          key: quran-assets-v6-${{ github.event.inputs.target_mb || '20' }}
 
       - name: Size report of assets
         run: |
@@ -591,10 +591,35 @@ jobs:
           ls -l $F
           MB=$(( $(stat -c%s $F) / 1048576 ))
           echo "APK size: ${MB} MB"
-          echo "Largest files inside the APK:"
-          unzip -l $F | sort -k1 -nr | head -12
-          if [ "$MB" -gt 65 ]; then
-            echo "WARNING: APK is larger than 65 MB"
+          echo "Size by part (compressed):"
+          python3 - <<'PY'
+          import zipfile, collections
+          z = zipfile.ZipFile('build/app/outputs/flutter-apk/app-release.apk')
+          agg = collections.Counter()
+          for i in z.infolist():
+              n = i.filename
+              if n.startswith('assets/flutter_assets/assets/mushaf'):
+                  k = 'quran pages'
+              elif n.startswith('assets/flutter_assets/assets/data/hadith_'):
+                  k = 'hadith books'
+              elif n.startswith('assets/flutter_assets/assets/data'):
+                  k = 'other data json'
+              elif 'fonts' in n and n.startswith('assets/flutter_assets'):
+                  k = 'fonts'
+              elif n.startswith('res/raw'):
+                  k = 'adhan audio'
+              elif n.startswith('lib/'):
+                  k = 'native libs'
+              elif n.endswith('.dex'):
+                  k = 'dex'
+              else:
+                  k = 'other'
+              agg[k] += i.compress_size
+          for k, v in agg.most_common():
+              print('%-16s %6.1f MB' % (k, v / 1048576))
+          PY
+          if [ "$MB" -gt 50 ]; then
+            echo "NOTE: APK is larger than 50 MB"
           fi
 
       - name: Publish APK to Releases
