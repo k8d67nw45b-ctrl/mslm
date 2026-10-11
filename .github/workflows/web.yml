@@ -102,17 +102,14 @@ jobs:
           find build/web -type f | wc -l
           find build/web -type f -size +20M -print
 
-      - name: Create Cloudflare project (first time only)
-        continue-on-error: true
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create rafiq-web --production-branch=main
-
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build/web --project-name=rafiq-web --branch=main
+        env:
+          RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$RAW_TOKEN" | LC_ALL=C tr -cd 'A-Za-z0-9_-')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$RAW_ACCOUNT" | LC_ALL=C tr -cd 'A-Za-z0-9')"
+          echo "token length: ${#CLOUDFLARE_API_TOKEN}"
+          echo "account id length: ${#CLOUDFLARE_ACCOUNT_ID}"
+          npx --yes wrangler@4 pages project create rafiq-web --production-branch=main || echo "project may already exist"
+          npx --yes wrangler@4 pages deploy build/web --project-name=rafiq-web --branch=main
