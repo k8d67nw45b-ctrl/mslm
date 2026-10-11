@@ -1,0 +1,118 @@
+name: Build Web
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Quran assets (made by the APK build)
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            assets/mushaf
+            assets/data
+          key: quran-assets-v6-20
+          fail-on-cache-miss: true
+
+      - name: Download adhkar data
+        run: |
+          mkdir -p assets/data
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/adhkar_ar.json https://raw.githubusercontent.com/Seen-Arabic/Morning-And-Evening-Adhkar-DB/main/ar.json
+
+      - name: Download hisn and nawawi
+        run: |
+          mkdir -p assets/data
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/hisn_almuslim.json https://raw.githubusercontent.com/rn0x/hisn_almuslim_json/main/hisn_almuslim.json
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/data/nawawi.json https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-nawawi.json
+
+      - name: Download six hadith books
+        run: |
+          mkdir -p assets/data
+          for b in bukhari muslim abudawud tirmidhi nasai ibnmajah; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o /tmp/raw_$b.json https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions/ara-$b.json
+          done
+          python3 - <<'PY'
+          import json
+          books = ['bukhari', 'muslim', 'abudawud', 'tirmidhi', 'nasai', 'ibnmajah']
+          for b in books:
+              d = json.load(open('/tmp/raw_%s.json' % b, encoding='utf-8'))
+              out = []
+              for h in d['hadiths']:
+                  text = (h.get('text') or '').strip()
+                  if not text:
+                      continue
+                  gr = ''
+                  by = ''
+                  g = h.get('grades') or []
+                  if g and isinstance(g[0], dict):
+                      gr = str(g[0].get('grade', ''))
+                      by = str(g[0].get('name', ''))
+                  out.append([h.get('hadithnumber'), text, gr, by])
+              assert len(out) > 1000, b
+              with open('assets/data/hadith_%s.json' % b, 'w', encoding='utf-8') as f:
+                  json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
+              print(b, len(out), 'hadiths')
+          PY
+
+      - name: Download fonts
+        run: |
+          mkdir -p assets/fonts
+          for n in Regular Medium Bold; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/fonts/Tajawal-$n.ttf https://raw.githubusercontent.com/googlefonts/tajawal/main/fonts/ttf/Tajawal-$n.ttf
+          done
+          for n in Regular Bold; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o assets/fonts/Amiri-$n.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-$n.ttf
+          done
+          ls -l assets/fonts
+          test "$(ls assets/fonts | wc -l)" -eq 5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Generate web folder
+        run: flutter create --platforms=web --project-name muslm --org com.muslm .
+
+      - name: Set site title
+        run: |
+          python3 - <<'PY'
+          for fn in ('web/index.html', 'web/manifest.json'):
+              s = open(fn, encoding='utf-8').read()
+              s = s.replace('muslm', '\u0631\u0641\u064a\u0642 \u0627\u0644\u0645\u0633\u0644\u0645')
+              open(fn, 'w', encoding='utf-8').write(s)
+              print('patched', fn)
+          PY
+
+      - run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --release
+
+      - name: Web size
+        run: |
+          du -sh build/web
+          du -sh build/web/assets
+          find build/web -type f | wc -l
+          find build/web -type f -size +20M -print
+
+      - name: Create Cloudflare project (first time only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create rafiq-web --production-branch=main
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy build/web --project-name=rafiq-web --branch=main
