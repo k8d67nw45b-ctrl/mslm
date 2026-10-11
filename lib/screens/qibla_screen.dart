@@ -1,432 +1,405 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_compass/flutter_compass.dart';
 import '../core/constants.dart';
-import '../core/theme_controller.dart';
-import 'location_service.dart';
-import 'rf_design.dart';
-import 'rf_page.dart';
+import 'prayer_tracker_service.dart';
+import 'qada_service.dart';
 
-const _kaabaLat = 21.4225;
-const _kaabaLon = 39.8262;
-
-double _rad(double d) => d * math.pi / 180;
-
-String _dirName(double b) {
-  const names = [
-    'شمال',
-    'شمال شرقي',
-    'شرق',
-    'جنوب شرقي',
-    'جنوب',
-    'جنوب غربي',
-    'غرب',
-    'شمال غربي',
-  ];
-  final i = ((b + 22.5) / 45).floor() % 8;
-  return names[i];
+int _toInt(String s) {
+  var t = s.trim();
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  for (var i = 0; i < 10; i++) {
+    t = t.replaceAll(ar[i], '$i');
+  }
+  return int.tryParse(t) ?? 0;
 }
 
-class _QiblaPainter extends CustomPainter {
-  final double heading;
-  final double bearing;
-  final bool aligned;
-  final bool dark;
-  _QiblaPainter(this.heading, this.bearing, this.aligned, this.dark);
-
-  void _text(Canvas c, String t, Color col, double size) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: t,
-        style: TextStyle(
-          color: col,
-          fontSize: size,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(c, Offset(-tp.width / 2, -tp.height / 2));
-  }
-
-  void _kaaba(Canvas canvas, Offset p, double s) {
-    final body = Rect.fromCenter(center: p, width: s, height: s);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(body, Radius.circular(s * 0.1)),
-      Paint()..color = const Color(0xFF15110F),
-    );
-    final gold = Paint()..color = const Color(0xFFD4AF37);
-    canvas.drawRect(
-      Rect.fromLTWH(body.left, body.top + s * 0.22, s, s * 0.13),
-      gold,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(p.dx - s * 0.1, p.dy + s * 0.05, s * 0.2, s * 0.3),
-      gold,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(body, Radius.circular(s * 0.1)),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = const Color(0xFFD4AF37),
-    );
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = math.min(size.width, size.height) / 2 - 6;
-    final ring = aligned ? kGreen : const Color(0xFF9AA5A0);
-    canvas.drawCircle(
-      c,
-      r,
-      Paint()
-        ..shader = RadialGradient(
-          colors: dark
-              ? const [Color(0xFF1A242B), Color(0xFF0F161B)]
-              : const [Color(0xFFFFFFFF), Color(0xFFE9EFEC)],
-        ).createShader(Rect.fromCircle(center: c, radius: r)),
-    );
-    canvas.drawCircle(
-      c,
-      r,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = aligned ? 7 : 4
-        ..color = ring,
-    );
-
-    canvas.save();
-    canvas.translate(c.dx, c.dy);
-    canvas.rotate(-_rad(heading));
-    final tick = Paint()
-      ..strokeWidth = 2
-      ..color = dark ? Colors.white54 : Colors.black45;
-    for (var i = 0; i < 72; i++) {
-      canvas.save();
-      canvas.rotate(_rad(i * 5.0));
-      final len = i % 18 == 0 ? 22.0 : (i % 6 == 0 ? 16.0 : 10.0);
-      canvas.drawLine(Offset(0, -r + 6), Offset(0, -r + 6 + len), tick);
-      canvas.restore();
-    }
-    const labels = ['N', 'E', 'S', 'W'];
-    for (var i = 0; i < 4; i++) {
-      final a = _rad(i * 90.0);
-      canvas.save();
-      canvas.rotate(a);
-      canvas.translate(0, -r + 42);
-      canvas.rotate(_rad(heading) - a);
-      _text(
-        canvas,
-        labels[i],
-        i == 0 ? Colors.redAccent : (dark ? Colors.white70 : Colors.black54),
-        16,
-      );
-      canvas.restore();
-    }
-    canvas.restore();
-
-    final th = _rad(bearing - heading);
-    final dir = Offset(math.sin(th), -math.cos(th));
-    final kp = c + dir * (r - 38);
-    canvas.drawLine(
-      c,
-      c + dir * (r - 62),
-      Paint()
-        ..strokeWidth = 4
-        ..strokeCap = StrokeCap.round
-        ..color = aligned ? kGreen : const Color(0xFFD4AF37),
-    );
-    canvas.drawCircle(c, 6, Paint()..color = aligned ? kGreen : Colors.grey);
-    if (aligned) {
-      canvas.drawCircle(
-        kp,
-        34,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [kGreen.withOpacity(0.6), Colors.transparent],
-          ).createShader(Rect.fromCircle(center: kp, radius: 34)),
-      );
-    }
-    _kaaba(canvas, kp, 30);
-
-    final tri = Path()
-      ..moveTo(c.dx - 9, c.dy - r - 1)
-      ..lineTo(c.dx + 9, c.dy - r - 1)
-      ..lineTo(c.dx, c.dy - r + 16)
-      ..close();
-    canvas.drawPath(
-      tri,
-      Paint()..color = aligned ? kGreen : const Color(0xFFD4AF37),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_QiblaPainter old) =>
-      old.heading != heading ||
-      old.bearing != bearing ||
-      old.aligned != aligned ||
-      old.dark != dark;
+String _span(int days) {
+  if (days <= 0) return 'خلصت';
+  if (days < 60) return '$days يوم';
+  if (days < 700) return '${(days / 30).round()} شهر';
+  return '${(days / 365).toStringAsFixed(1)} سنة';
 }
 
-class QiblaScreen extends StatefulWidget {
-  const QiblaScreen({Key? key}) : super(key: key);
+class QadaScreen extends StatefulWidget {
+  const QadaScreen({Key? key}) : super(key: key);
 
   @override
-  State<QiblaScreen> createState() => _QiblaScreenState();
+  State<QadaScreen> createState() => _QadaScreenState();
 }
 
-class _QiblaScreenState extends State<QiblaScreen> {
-  double? qiblaBearing;
-  double distance = 0;
-  String? error;
-  String place = '';
-  double? _sm;
-  bool _aligned = false;
+class _QadaScreenState extends State<QadaScreen> {
+  List<int> q = List.filled(5, 0);
+  List<int> done = List.filled(5, 0);
+  FastQada fast = const FastQada(0, 0);
+  QadaPlan plan = const QadaPlan(1, 1);
+  bool loaded = false;
 
   @override
   void initState() {
     super.initState();
-    _loadQibla();
+    _load();
   }
 
-  Future<void> _loadQibla() async {
+  Future<void> _load() async {
+    final a = await loadQada();
+    final b = await loadPrayerDone();
+    final c = await loadFast();
+    final d = await loadPlan();
+    if (!mounted) return;
     setState(() {
-      error = null;
-      qiblaBearing = null;
+      q = a;
+      done = b;
+      fast = c;
+      plan = d;
+      loaded = true;
     });
-    try {
-      final loc = await getLocation();
-      if (!mounted) return;
-      setState(() {
-        place = loc.name;
-        qiblaBearing = _bearingToKaaba(loc.lat, loc.lon);
-        distance = _distanceKm(loc.lat, loc.lon);
-      });
-    } catch (e) {
-      if (mounted) setState(() => error = e.toString());
-    }
   }
 
-  Future<void> _pick() async {
-    final ok = await showCityPicker(context);
-    if (ok) _loadQibla();
-  }
-
-  double _bearingToKaaba(double lat, double lon) {
-    final dLon = _rad(_kaabaLon - lon);
-    final y = math.sin(dLon) * math.cos(_rad(_kaabaLat));
-    final x = math.cos(_rad(lat)) * math.sin(_rad(_kaabaLat)) -
-        math.sin(_rad(lat)) * math.cos(_rad(_kaabaLat)) * math.cos(dLon);
-    return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
-  }
-
-  double _distanceKm(double lat, double lon) {
-    const r = 6371.0;
-    final dLat = _rad(_kaabaLat - lat);
-    final dLon = _rad(_kaabaLon - lon);
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_rad(lat)) *
-            math.cos(_rad(_kaabaLat)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-  }
-
-  double _filter(double h) {
-    if (_sm == null) {
-      _sm = h;
-      return h;
-    }
-    final d = ((h - _sm! + 540) % 360) - 180;
-    _sm = (_sm! + d * 0.2 + 360) % 360;
-    return _sm!;
-  }
-
-  Future<void> _buzz() async {
-    HapticFeedback.heavyImpact();
-    await Future.delayed(const Duration(milliseconds: 140));
-    HapticFeedback.heavyImpact();
-  }
-
-  void _calibrate() {
-    showDialog<void>(
+  Future<int?> _askNumber(String title, String label, String hint) {
+    final c = TextEditingController();
+    return showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('معايرة البوصلة'),
-        content: const Text(
-          'أمسك الجوال وحرّكه ببطء في الهواء على شكل رقم 8 عدة مرات، '
-          'وابعده عن المعادن والمغناطيس والأجهزة الكهربائية، ثم راقب '
-          'الاتجاه من جديد.',
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label),
+            TextField(
+              controller: c,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(hintText: hint),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('حسناً'),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, _toInt(c.text)),
+            child: const Text('حفظ'),
           ),
         ],
       ),
     );
   }
 
-  Widget _compass() {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return StreamBuilder<CompassEvent>(
-      stream: FlutterCompass.events,
-      builder: (context, snap) {
-        final raw = snap.data?.heading;
-        if (raw == null) {
-          return const RfCard(
-            child: Text(
-              'البوصلة غير متوفرة بهذا الجهاز',
-              textAlign: TextAlign.center,
-            ),
-          );
-        }
-        final heading = _filter((raw + 360) % 360);
-        final bearing = qiblaBearing!;
-        final diff = ((bearing - heading + 540) % 360) - 180;
-        final aligned = diff.abs() < 4;
-        if (aligned && !_aligned) _buzz();
-        _aligned = aligned;
-        return Column(
+  void _snack(String msg, Future<void> Function() undo) {
+    final m = ScaffoldMessenger.of(context);
+    m.hideCurrentSnackBar();
+    m.showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        action: SnackBarAction(
+          label: 'تراجع',
+          onPressed: () async {
+            await undo();
+            await _load();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _madeUp(int i) async {
+    await madeUpPrayer(i);
+    await _load();
+    _snack('تقبل الله، سُجّلت قضاء ${kPrayerNames[i]}',
+        () => undoMadeUpPrayer(i));
+  }
+
+  Future<void> _addMissed(int i) async {
+    await addQada(i, 1);
+    await _load();
+  }
+
+  Future<void> _bulk() async {
+    final n = await _askNumber(
+      'إضافة أيام فائتة',
+      'عدد الأيام التي فاتتك فيها الصلوات الخمس كلها:',
+      'مثال: 10',
+    );
+    if (n == null || n <= 0) return;
+    for (var i = 0; i < 5; i++) {
+      await addQada(i, n);
+    }
+    await _load();
+  }
+
+  Future<void> _planPrayer() async {
+    final n = await _askNumber(
+      'خطة القضاء',
+      'كم يوماً (خمس صلوات) تقضي باليوم؟',
+      'مثال: 1',
+    );
+    if (n == null || n <= 0) return;
+    await savePlan(daysPerDay: n);
+    await _load();
+  }
+
+  Future<void> _addFast() async {
+    final n = await _askNumber(
+      'إضافة أيام صيام فائتة',
+      'عدد الأيام التي عليك قضاؤها:',
+      'مثال: 6',
+    );
+    if (n == null || n <= 0) return;
+    await addFastOwed(n);
+    await _load();
+  }
+
+  Future<void> _planFast() async {
+    final n = await _askNumber(
+      'خطة قضاء الصيام',
+      'كم يوماً تصوم قضاءً في الأسبوع؟',
+      'مثال: 2',
+    );
+    if (n == null || n <= 0) return;
+    await savePlan(fastsPerWeek: n);
+    await _load();
+  }
+
+  Future<void> _madeUpFast() async {
+    await madeUpFast();
+    await _load();
+    _snack('تقبل الله صيامك، سُجّل يوم قضاء', undoMadeUpFast);
+  }
+
+  Future<void> _reset() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تصفير القضاء'),
+        content: const Text(
+            'سيُصفَّر عدّاد الصلوات والصيام وكل الإنجاز المسجّل. متأكد؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('تصفير'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await resetAllQada();
+    await _load();
+  }
+
+  Widget _bar(double v) => ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: LinearProgressIndicator(
+          value: v.clamp(0.0, 1.0).toDouble(),
+          minHeight: 8,
+          color: kGreen,
+          backgroundColor: kGreen.withOpacity(0.2),
+        ),
+      );
+
+  Widget _summary({
+    required int owed,
+    required int doneN,
+    required String unit,
+    required String estimate,
+    required List<Widget> buttons,
+  }) {
+    final total = owed + doneN;
+    final prog = total == 0 ? 0.0 : doneN / total;
+    return Card(
+      color: kCardBackground,
+      child: Padding(
+        padding: const EdgeInsets.all(kPaddingMedium),
+        child: Column(
           children: [
-            RfCard(
-              child: Column(
-                children: [
-                  TextButton.icon(
-                    onPressed: _pick,
-                    icon: const Icon(Icons.location_on, color: kGreen),
-                    label: Text(
-                      '${place.isEmpty ? 'تحديد الموقع' : place} (تغيير)',
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    width: 300,
-                    height: 300,
-                    child: CustomPaint(
-                      painter: _QiblaPainter(heading, bearing, aligned, dark),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    aligned
-                        ? 'أنت باتجاه القبلة ✓'
-                        : 'استدر حتى تصير الكعبة عند المؤشر',
-                    style: TextStyle(
-                      color: aligned ? kGreen : null,
-                      fontWeight:
-                          aligned ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 17,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '${bearing.round()}°',
-                    style: const TextStyle(
-                      fontSize: 46,
-                      fontWeight: FontWeight.bold,
-                      color: kGreen,
-                    ),
-                  ),
-                  Text(
-                    '(${_dirName(bearing)})',
-                    style: const TextStyle(color: Colors.grey, fontSize: 15),
-                  ),
-                ],
+            Text(
+              '$owed',
+              style: const TextStyle(
+                fontSize: 44,
+                fontWeight: FontWeight.bold,
+                color: kGreen,
               ),
             ),
-            RfCard(
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.straighten, color: kGreen),
-                      const SizedBox(width: 10),
-                      const Text('المسافة إلى الكعبة'),
-                      const Spacer(),
-                      Text(
-                        '${distance.round()} كم',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _calibrate,
-                      icon: const Icon(Icons.explore),
-                      label: const Text('معايرة البوصلة'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: rfDeep,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'يرجى معايرة البوصلة للحصول على أدق النتائج، وإبعاد '
-                    'الجوال عن المعادن والمغناطيس.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
+            Text('$unit متبقٍّ للقضاء'),
+            const SizedBox(height: 12),
+            _bar(prog),
+            const SizedBox(height: 6),
+            Text(
+              total == 0
+                  ? 'ابدأ بإضافة ما عليك'
+                  : 'قضيت $doneN من $total  (${(prog * 100).round()}%)',
+              style: const TextStyle(fontSize: 12),
+            ),
+            if (owed > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                estimate,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.center,
+              children: buttons,
             ),
           ],
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _prayersTab() {
+    final owed = q.fold<int>(0, (a, b) => a + b);
+    final doneN = done.fold<int>(0, (a, b) => a + b);
+    var mx = 0;
+    for (final v in q) {
+      if (v > mx) mx = v;
+    }
+    final per = plan.daysPerDay < 1 ? 1 : plan.daysPerDay;
+    final days = (mx / per).ceil();
+    return ListView(
+      padding: const EdgeInsets.all(kPaddingMedium),
+      children: [
+        _summary(
+          owed: owed,
+          doneN: doneN,
+          unit: 'صلاة',
+          estimate:
+              'بمعدل $per يوم قضاء باليوم تخلّص تقريباً بعد ${_span(days)}',
+          buttons: [
+            ElevatedButton.icon(
+              onPressed: _bulk,
+              icon: const Icon(Icons.add),
+              label: const Text('إضافة أيام فائتة'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _planPrayer,
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('الخطة'),
+            ),
+          ],
+        ),
+        const SizedBox(height: kPaddingSmall),
+        for (var i = 0; i < 5; i++)
+          Card(
+            color: kCardBackground,
+            child: ListTile(
+              title: Text(kPrayerNames[i]),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('قضيت ${done[i]}  •  متبقٍّ ${q[i]}',
+                        style: const TextStyle(fontSize: 12)),
+                    const SizedBox(height: 4),
+                    _bar(q[i] + done[i] == 0
+                        ? 0.0
+                        : done[i] / (q[i] + done[i])),
+                  ],
+                ),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'قضيت واحدة',
+                    icon: const Icon(Icons.check_circle_outline),
+                    color: kGreen,
+                    onPressed: q[i] > 0 ? () => _madeUp(i) : null,
+                  ),
+                  IconButton(
+                    tooltip: 'فاتتني واحدة',
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: () => _addMissed(i),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        const Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            '(✓) قضيت واحدة   (+) فاتتني واحدة. الصلاة اللي تعلّمها «فاتتني» '
+            'بشاشة المتابعة تنضاف هنا تلقائياً. الأرقام للمتابعة الشخصية، '
+            'وأحكام القضاء وترتيبه ترجع فيها لعالم أو جهة إفتاء.',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fastTab() {
+    final per = plan.fastsPerWeek < 1 ? 1 : plan.fastsPerWeek;
+    final days = (fast.owed / per).ceil() * 7;
+    return ListView(
+      padding: const EdgeInsets.all(kPaddingMedium),
+      children: [
+        _summary(
+          owed: fast.owed,
+          doneN: fast.done,
+          unit: 'يوم صيام',
+          estimate:
+              'بمعدل $per يوم بالأسبوع تخلّص تقريباً بعد ${_span(days)}',
+          buttons: [
+            ElevatedButton.icon(
+              onPressed: fast.owed > 0 ? _madeUpFast : null,
+              icon: const Icon(Icons.check),
+              label: const Text('قضيت يوماً'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _addFast,
+              icon: const Icon(Icons.add),
+              label: const Text('إضافة أيام'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _planFast,
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('الخطة'),
+            ),
+          ],
+        ),
+        const Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            'مثال: أفطرت أياماً من رمضان لعذر؟ أضفها هنا وسجّل كل يوم تقضيه. '
+            'أحكام القضاء والكفارة تختلف بحسب الحالة، فارجع فيها لعالم أو '
+            'جهة إفتاء.',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[
-      RfPageHeader(
-        title: 'اتجاه القبلة',
-        subtitle: 'نحو الكعبة المشرفة',
-        trailing: IconButton(
-          icon: const Icon(Icons.brightness_6, color: Colors.white),
-          onPressed: ThemeController.toggle,
-        ),
-      ),
-    ];
-    if (error != null) {
-      children.add(
-        RfCard(
-          child: Column(
-            children: [
-              Text(error!, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _pick,
-                child: const Text('اختيار المدينة'),
-              ),
-              TextButton(
-                onPressed: _loadQibla,
-                child: const Text('إعادة المحاولة'),
-              ),
-            ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('قضاء الفوائت'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: _reset,
+            ),
+          ],
+          bottom: const TabBar(
+            tabs: [Tab(text: 'الصلوات'), Tab(text: 'الصيام')],
           ),
         ),
-      );
-    } else if (qiblaBearing == null) {
-      children.add(
-        const Padding(
-          padding: EdgeInsets.all(40),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      );
-    } else {
-      children.add(_compass());
-    }
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 28),
-      children: children,
+        body: !loaded
+            ? const Center(child: CircularProgressIndicator())
+            : TabBarView(children: [_prayersTab(), _fastTab()]),
+      ),
     );
   }
 }
