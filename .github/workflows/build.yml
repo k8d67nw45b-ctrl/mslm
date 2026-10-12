@@ -192,6 +192,58 @@ jobs:
           ls -l assets/data/hadith_*.json
           du -ch assets/data/hadith_*.json | tail -1
 
+      - name: Download Riyad as-Salihin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p assets/data
+          python3 - <<'PY'
+          import json, os, urllib.request
+          REPO = 'A7med3bdulbaset/hadith-json'
+          TAG = 'v1.2.0'
+          HDR = {'User-Agent': 'Mozilla/5.0'}
+          tok = os.environ.get('GH_TOKEN')
+          if tok:
+              HDR['Authorization'] = 'Bearer ' + tok
+
+          def get(url):
+              req = urllib.request.Request(url, headers=HDR)
+              return urllib.request.urlopen(req, timeout=180).read()
+
+          api = 'https://api.github.com/repos/%s/contents/db/by_book/other_books?ref=%s' % (REPO, TAG)
+          files = json.loads(get(api).decode('utf-8'))
+          print('files in other_books:', [f['name'] for f in files])
+          pick = None
+          for f in files:
+              n = f['name'].lower()
+              if n.endswith('.json') and ('ryad' in n or 'riyad' in n):
+                  pick = f
+                  break
+          if pick is None:
+              raise SystemExit('Riyad file not found, see the list above')
+          print('using', pick['name'], pick.get('size'))
+          d = json.loads(get(pick['download_url']).decode('utf-8'))
+          print('top-level type:', type(d).__name__, list(d.keys())[:10] if isinstance(d, dict) else len(d))
+          hs = d['hadiths'] if isinstance(d, dict) else d
+          chs = d.get('chapters', []) if isinstance(d, dict) else []
+          chap = []
+          for c in chs:
+              t = c.get('arabic') or ''
+              chap.append([c.get('id'), str(t).strip()])
+          rows = []
+          for h in hs:
+              t = h.get('arabic') or ''
+              t = str(t).strip()
+              if not t:
+                  continue
+              rows.append([h.get('idInBook') or h.get('id'), h.get('chapterId'), t])
+          print('chapters', len(chap), 'hadiths', len(rows))
+          assert len(rows) > 1000, 'unexpected hadith count'
+          with open('assets/data/riyad.json', 'w', encoding='utf-8') as f:
+              json.dump({'c': chap, 'h': rows}, f, ensure_ascii=False, separators=(',', ':'))
+          PY
+          ls -l assets/data/riyad.json
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
