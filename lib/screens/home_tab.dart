@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
 import '../core/theme_controller.dart';
+import 'ai_screen.dart';
 import 'daily_adhkar_screen.dart';
 import 'daily_content.dart';
 import 'growth_screen.dart';
@@ -18,6 +19,7 @@ import 'home_sections.dart';
 import 'home_stats_card.dart';
 import 'home_widgets2.dart';
 import 'khatma_screen.dart';
+import 'library_screen.dart';
 import 'location_service.dart';
 import 'mushaf_reader.dart';
 import 'mushaf_service.dart';
@@ -27,6 +29,7 @@ import 'notifications_screen.dart';
 import 'prayer_helpers.dart';
 import 'prayer_logic.dart';
 import 'prayer_tracker_screen.dart';
+import 'qada_screen.dart';
 import 'ramadan_screen.dart';
 import 'rf_design.dart';
 import 'ruqyah_screen.dart';
@@ -224,15 +227,17 @@ class _HomeTabState extends State<HomeTab> {
 
   List<RfSvc> _services() {
     return [
+      RfSvc('المساعد الذكي', Icons.smart_toy, () => _go(const AiScreen())),
       RfSvc('متابعة الصلوات', Icons.fact_check,
           () => _go(const PrayerTrackerScreen())),
+      RfSvc('قضاء الفوائت', Icons.history, () => _go(const QadaScreen())),
       RfSvc('رمضان', Icons.nightlight_round, () => _go(const RamadanScreen())),
       RfSvc('زكاة المال', Icons.calculate, () => _go(const ZakatScreen())),
       RfSvc('التقويم الهجري', Icons.calendar_month,
           () => _go(const HijriCalendarScreen())),
       RfSvc('الختمة', Icons.auto_awesome, () => _go(const KhatmaScreen())),
       RfSvc('الإحصائيات', Icons.insights, () => _go(const StatsScreen())),
-      RfSvc('شجرة التزامك', Icons.park, () => _go(const GrowthScreen())),
+      RfSvc('حديقتك الإيمانية', Icons.park, () => _go(const GrowthScreen())),
       RfSvc('المسبحة', Icons.touch_app, () => _go(const TasbihScreen())),
       RfSvc('أذكار الصباح', Icons.wb_sunny,
           () => _go(const DailyAdhkarScreen(morning: true))),
@@ -244,6 +249,7 @@ class _HomeTabState extends State<HomeTab> {
           () => _go(const NawawiScreen())),
       RfSvc('الكتب الستة', Icons.library_books,
           () => _go(const HadithBooksScreen())),
+      RfSvc('المكتبة', Icons.local_library, () => _go(const LibraryScreen())),
       RfSvc('الحج والعمرة', Icons.mosque, () => _go(const HajjScreen())),
       RfSvc('المصحف', Icons.auto_stories,
           () => _go(MushafReader(startPage: lastPage ?? 1))),
