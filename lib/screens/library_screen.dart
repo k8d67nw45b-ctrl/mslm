@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
+import 'creed_books.dart';
 import 'riyad_screen.dart';
 
 class LibraryScreen extends StatelessWidget {
@@ -55,6 +56,18 @@ class LibraryScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const RiyadScreen()),
+            ),
+          ),
+          _book(
+            context,
+            title: 'كتب العقيدة',
+            author: 'الأصول الثلاثة، القواعد الأربع، كشف الشبهات، '
+                'كتاب التوحيد، الواسطية',
+            about: 'متون مختصرة مع قراءة مريحة وبحث وتكبير للخط.',
+            icon: Icons.auto_stories,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CreedBooksScreen()),
             ),
           ),
           _book(
